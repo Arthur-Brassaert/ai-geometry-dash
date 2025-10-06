@@ -1,0 +1,2 @@
+# AI-Programming
+GitHub repo voor alle bestanden rondom het AI-Programming project van Kyell De Windt, Juha Schacht en Arthur Brassert
