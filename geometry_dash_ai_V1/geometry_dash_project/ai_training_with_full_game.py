@@ -82,11 +82,26 @@ class NotifyingEvalCallback(EvalCallback):
                 try:
                     with open(best_file, 'r', encoding='utf-8') as bf:
                         data = json.load(bf)
-                        if 'best_mean_reward' in data:
+                        if 'best_mean_reward' in data and data['best_mean_reward'] is not None:
                             # Use the global best as the starting best_mean_reward so
                             # logging reflects comparisons to the true persisted best
                             # instead of showing 'was -inf' after a restart.
                             self.best_mean_reward = float(data['best_mean_reward'])
+                except Exception:
+                    pass
+            else:
+                # If the persistent best file was removed, create a minimal template
+                # so subsequent code can update it reliably. We do not set a numerical
+                # best here — let training/eval determine the first measurable best.
+                try:
+                    template = {
+                        'best_mean_reward': None,
+                        'previous_best': None,
+                        'run': None,
+                        'timestamp': None,
+                    }
+                    with open(best_file, 'w', encoding='utf-8') as bf:
+                        json.dump(template, bf, indent=2)
                 except Exception:
                     pass
         except Exception:
