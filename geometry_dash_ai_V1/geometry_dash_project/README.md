@@ -24,7 +24,8 @@ This repository contains:
   - [TensorBoard](#tensorboard)
   - [Troubleshooting](#troubleshooting)
   - [Development notes](#development-notes)
-  - [Interpreting PPO / training terminal output](#interpreting-ppo--training-terminal-output)
+  - [PPO Training / Terminal Output Guide](#ppo-training--terminal-output-guide)
+  - [Typische volgorde tijdens een goedlopende training](#typische-volgorde-tijdens-een-goedlopende-training)
 
 ## Install
 
@@ -133,26 +134,20 @@ Open [http://localhost:6006](http://localhost:6006) in your browser.
 
 If you want me to also: (a) run a lint/format pass for GitHub-flavored Markdown, (b) add badges or CI snippets, or (c) add a short Quickstart script, tell me which and I'll add it.
 
-## Interpreting PPO / training terminal output
+## PPO Training / Terminal Output Guide
 
-When you run `ai_training_with_full_game.py` (PPO via Stable-Baselines3) you will see frequent terminal lines reporting training progress and occasional evaluation summaries. Here's a short guide to the most common outputs and what they mean:
+| Outputtype                 | Wat het betekent   | Extra info / voorbeeld |
+|----------------------------|--------------------|------------------------|
+| Timesteps / Progress       | Hoeveel environment-steps zijn uitgevoerd t.o.v. het doel.| Progress: `1.2e+06 / 2.0e+06`|
+| FPS / Performance          | Frames-per-second en optimizer-updates; hogere waarden = sneller trainen. | `fps=123.4, n_updates=45`|
+| Eval summary               | Resultaat van een evaluatiesessie (uitgevoerd na `--eval-freq` stappen). | `Eval num_timesteps=2000, mean_reward=123.45 ± 67.89`|
+| New best mean reward       | De gemiddelde reward over evaluatie-episodes verbeterde — een nieuw 'best' wordt opgeslagen.| `New best mean reward!` → `trained_models/best_20251022_212300.zip`|
+| Saved artifacts            | Bestanden die bij een nieuwe best (of checkpoint) worden weggeschreven.| `Saving canonical best_model.zip`; bijbehorend `*_vecnormalize.pkl`|
+| Timed / early stop         | Training stopt na opgegeven wall-clock tijd (`--train-seconds`) of vroegtijdig door callback.| `TimedStopCallback: stopping training after ~3600s`|
+| Warnings / Errors          | Pytorch- of omgeving-waarschuwingen (CPU vs GPU, CUDA, seeding) — kan resultaten beïnvloeden.| Let op stacktraces en device/CPU vs CUDA meldingen|
 
-- Timesteps / Progress bars: SB3 prints a progress bar or periodic updates showing total timesteps executed (e.g. `Progress: 1.2e+06/2.0e+06`). This shows how far you are through the requested `--timesteps`.
+## Typische volgorde tijdens een goedlopende training
 
-- FPS / performance: you may see `fps` or `n_updates` metrics. Higher `fps` (frames per second) means faster environment stepping; `n_updates` indicates how many gradient updates the optimizer has performed.
-
-- Eval summaries (printed by the EvalCallback):
-  - `Eval num_timesteps=2000, mean_reward=123.45 +/- 67.89` — an evaluation run was executed after the configured `--eval-freq` steps. `mean_reward` is averaged over `--eval-episodes` episodes and the `+/-` value is the standard deviation.
-  - The EvalCallback prints `New best mean reward!` when the current `mean_reward` improves on the stored global best. That triggers saving a checkpoint and updating `best_overall.json`.
-
-- Saved artifact messages: when the callback saves a model you'll see messages like `Saving new best to trained_models/best_20251022_212300.zip` or `Saving canonical best_model.zip`. These indicate where checkpoints and VecNormalize pickles are written.
-
-- Timed stops / early stop: if you supplied `--train-seconds`, you'll see a message from the `TimedStopCallback` like `TimedStopCallback: stopping training after ~3600s` and the training loop will gracefully finish and save the final model.
-
-- Warnings & errors: pay attention to Pytorch warnings about device (CPU vs GPU), missing CUDA, or deterministic seed messages. These can affect performance or reproduceability.
-
-Typical sequence on an improving run:
-
-1. Training runs and periodically logs timesteps/fps.
-2. Evaluation executes at `--eval-freq` and prints `mean_reward` / `std`.
-3. When `mean_reward` exceeds the previous best, you see `New best mean reward!` and saving of a timestamped archive + an updated `best_model.zip` and `best_overall.json`.
+1. Training loopt en logt periodiek timesteps / fps.  
+2. Evaluatie gebeurt volgens `--eval-freq` en print `mean_reward / std`.  
+3. Als `mean_reward` hoger is dan eerder, zie je `New best mean reward!` en worden modellen + JSON bestanden opgeslagen.  
