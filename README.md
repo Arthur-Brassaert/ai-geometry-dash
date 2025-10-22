@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 
 See detailed documentation here:  
-👉 [geometry_dash_ai_v1\geometry_dash_project\README.md](geometry_dash_ai_v1\geometry_dash_project\README.md)
+👉 [geometry_dash_ai_v1\geometry_dash_project\README.md](ai-geometry-dash\geometry_dash_ai_v1\geometry_dash_project\README.md)
 
 AI Geometry Dash is a compact educational project containing:
 
