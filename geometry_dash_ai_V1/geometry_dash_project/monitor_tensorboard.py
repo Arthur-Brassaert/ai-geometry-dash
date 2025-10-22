@@ -1,165 +1,163 @@
 """monitor_tensorboard.py
 
-Small helper to find TensorBoard event folders in this repo and start TensorBoard
-using the venv Python / TensorBoard API. Useful on Windows when `tensorboard` may
-not be on PATH.
+Robust helper to find TensorBoard event folders and start TensorBoard
+using the project's virtual environment Python when available.
+
+This script does the following:
+ - auto-detect likely `trained_models/logs` locations inside the project
+ - if a venv is present (./.venv on Windows), use its Python to run
+   `python -m tensorboard.main --logdir ...` so tensorboard runs with the
+   environment that has the correct packages installed
+ - runs TensorBoard in the foreground and (optionally) opens a browser
 
 Usage:
-  python monitor_tensorboard.py                          # auto-detect logdirs and start TB on port 6006
-  python monitor_tensorboard.py --port 6007 --no-launch  # show found logdirs but don't start
-  python monitor_tensorboard.py --logdir "path/to/logs"  # force a specific logdir
-  python monitor_tensorboard.py --no-browser             # don't open browser automatically
-  python monitor_tensorboard.py --help                   # show this help message
+  python monitor_tensorboard.py                # auto-detect and start TB on port 6006
+  python monitor_tensorboard.py --logdir PATH  # force a specific logdir
+  python monitor_tensorboard.py --no-browser   # don't open the browser
+  python monitor_tensorboard.py --port 6007
 
 """
+
 import argparse
 import os
-import webbrowser
-import sys
-import importlib
 import subprocess
-import shutil
+import sys
 import time
-# import the project's logging config to find the canonical LOG_ROOT
-try:
-    from logging_config import LOG_ROOT
-except Exception:
-    LOG_ROOT = None
+import webbrowser
+from typing import List, Optional
 
 
-REPO_ROOT = os.path.dirname(os.path.realpath(__file__))
-
-# Candidate relative paths to search for event files
-CANDIDATES = [
-    # prefer the canonical LOG_ROOT from logging_config when available
-    os.path.abspath(LOG_ROOT) if LOG_ROOT else None,
-    os.path.join('geometry_dash_ai_V1', 'geometry dash', 'geometry_dash_project', 'tensorboard_log'),
-    os.path.join('geometry_dash_ai_V1', 'geometry dash', 'geometry_dash_project', 'training_logs'),
-    os.path.join('geometry_dash_ai_V1', 'geometry dash', 'geometry_dash_project', 'tensorboard_logs'),
-]
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
-def find_logdirs(explicit_logdir=None):
-    dirs = []
-    seen = set()
+def find_venv_python() -> Optional[str]:
+    """Return path to the project's venv Python executable if present.
 
-    def add_path(d):
-        d = os.path.abspath(d)
-        if d not in seen:
-            seen.add(d)
-            dirs.append(d)
+    On Windows this is `.venv\Scripts\python.exe`. On *nix it's `.venv/bin/python`.
+    """
+    # Prefer an activated venv if available
+    venv = os.environ.get('VIRTUAL_ENV')
+    if venv:
+        candidate = os.path.join(venv, 'Scripts' if os.name == 'nt' else 'bin', 'python.exe' if os.name == 'nt' else 'python')
+        if os.path.isfile(candidate):
+            return candidate
 
-    # If user supplied a specific logdir, inspect it for events (either
-    # directly or in subfolders) and return only matching folders.
+    # Fall back to a .venv folder inside the repo
+    dotvenv = os.path.join(REPO_ROOT, '.venv')
+    if os.path.isdir(dotvenv):
+        candidate = os.path.join(dotvenv, 'Scripts' if os.name == 'nt' else 'bin', 'python.exe' if os.name == 'nt' else 'python')
+        if os.path.isfile(candidate):
+            return candidate
+
+    return None
+
+
+def find_logdirs(explicit_logdir: Optional[str] = None) -> List[str]:
+    """Search likely locations for TensorBoard event files and return matching folders.
+
+    If explicit_logdir is supplied it will be inspected (absolute or repo-relative).
+    """
+    candidates = []
+    # Common locations used in this project
+    candidates.append(os.path.join(REPO_ROOT, 'geometry_dash_project', 'trained_models', 'logs'))
+    candidates.append(os.path.join(REPO_ROOT, 'trained_models', 'logs'))
+    candidates.append(os.path.join(REPO_ROOT, 'geometry_dash_ai_v1', 'geometry_dash_project', 'trained_models', 'logs'))
+    candidates.append(os.path.join(REPO_ROOT, 'geometry_dash_ai_V1', 'geometry_dash_project', 'trained_models', 'logs'))
+
+    # Include an explicit logdir if provided
     if explicit_logdir:
         p = explicit_logdir if os.path.isabs(explicit_logdir) else os.path.join(REPO_ROOT, explicit_logdir)
-        if not os.path.exists(p):
-            return []
-        try:
-            # Check direct tfevents in p
-            for f in os.listdir(p):
-                if 'tfevents' in f:
-                    add_path(p)
-                    return dirs
-            # Otherwise look for subfolders that contain tfevents
-            for child in os.listdir(p):
-                child_path = os.path.join(p, child)
-                if os.path.isdir(child_path):
-                    for f in os.listdir(child_path):
-                        if 'tfevents' in f:
-                            add_path(child_path)
-                            break
-            return dirs
-        except PermissionError:
-            return []
+        if os.path.exists(p):
+            candidates.insert(0, p)
 
-    # No explicit logdir: search the candidate locations
-    for rel in CANDIDATES:
-        if not rel:
+    found = []
+    seen = set()
+
+    def _add(path: str):
+        path = os.path.abspath(path)
+        if path not in seen and os.path.isdir(path):
+            seen.add(path)
+            found.append(path)
+
+    for c in candidates:
+        if not c:
             continue
-        # allow absolute LOG_ROOT values or relative entries
-        p = rel if os.path.isabs(rel) else os.path.join(REPO_ROOT, rel)
-        if not os.path.isdir(p):
+        if not os.path.isdir(c):
             continue
+        # If the folder itself has event files, add it
         try:
-            # First, add any child folders that contain tfevents
-            for child in os.listdir(p):
-                child_path = os.path.join(p, child)
-                if os.path.isdir(child_path):
-                    for f in os.listdir(child_path):
-                        if 'tfevents' in f:
-                            add_path(child_path)
-                            break
-            # If the parent itself contains tfevents, include it as well
-            for f in os.listdir(p):
-                if 'tfevents' in f:
-                    add_path(p)
+            for fname in os.listdir(c):
+                if 'tfevents' in fname:
+                    _add(c)
                     break
+            # Also check subfolders for event files (typical TB layout)
+            for child in os.listdir(c):
+                child_path = os.path.join(c, child)
+                if os.path.isdir(child_path):
+                    for fname in os.listdir(child_path):
+                        if 'tfevents' in fname:
+                            _add(child_path)
+                            break
         except PermissionError:
             continue
 
-    return dirs
-def start_tensorboard(logdir, port=6006, open_browser=True):
+    return found
+
+
+def start_tensorboard_subprocess(python_exe: str, logdir: str, port: int, open_browser: bool) -> subprocess.Popen:
+    """Start TensorBoard using the specified Python executable in the foreground.
+
+    Returns the subprocess.Popen instance.
     """
-    Try to use the TensorBoard Python API if available; otherwise fall back to
-    launching the 'tensorboard' CLI via subprocess. Returns the TensorBoard
-    object (if API used) or the subprocess.Popen object (if CLI used).
-    """
-    # First, try to import the tensorboard.program module dynamically.
-    try:
-        tb_module = importlib.import_module('tensorboard.program')
-        tb = tb_module.TensorBoard()
-        tb.configure(argv=[None, '--logdir', logdir, '--port', str(port)])
-        url = tb.launch()
-        print(f"TensorBoard serving {logdir} at: {url}")
-        if open_browser:
-            webbrowser.open(url)
-        return tb
-    except (ModuleNotFoundError, ImportError):
-        # Fallback: try to find a tensorboard executable on PATH.
-        tb_cmd = shutil.which('tensorboard')
-        if not tb_cmd:
-            raise RuntimeError(
-                "TensorBoard package not found and 'tensorboard' command not on PATH. "
-                "Install tensorboard in your environment (e.g. 'pip install tensorboard') "
-                "or activate the virtual environment that contains it."
-            )
-        cmd = [tb_cmd, "--logdir", logdir, "--port", str(port)]
-        # Start TensorBoard as a subprocess and don't block the caller.
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        url = f"http://localhost:{port}/"
-        print(f"Started tensorboard process for {logdir} at: {url} (PID {proc.pid})")
-        if open_browser:
-            # Give the server a moment to start before opening the browser.
-            time.sleep(1.0)
-            webbrowser.open(url)
-        return proc
+    cmd = [python_exe, '-m', 'tensorboard.main', '--logdir', logdir, '--port', str(port)]
+    print('Launching:', ' '.join(cmd))
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+    url = f'http://localhost:{port}/'
+    # Wait briefly for server to start and open browser
     if open_browser:
-        webbrowser.open(url)
-    return tb
+        # give tensorboard a second to bind the port
+        time.sleep(1.0)
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+    return proc
+
+
+def tail_process_output(proc: subprocess.Popen):
+    """Stream subprocess output to stdout until it exits or user interrupts."""
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            print(line, end='')
+    except KeyboardInterrupt:
+        print('\nKeyboard interrupt received — terminating TensorBoard...')
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--logdir', type=str, default=None, help='Force a logdir to use')
-    parser.add_argument('--port', type=int, default=6006)
-    parser.add_argument('--no-launch', action='store_true', help="Don't start TensorBoard, just list found logdirs")
-    parser.add_argument('--no-browser', action='store_true', help="Don't open the browser automatically")
+    parser = argparse.ArgumentParser(description='Find TensorBoard logs and run TensorBoard (uses project venv if available)')
+    parser.add_argument('--logdir', type=str, default=None, help='Force a specific logdir (absolute or repo-relative path)')
+    parser.add_argument('--port', type=int, default=6006, help='Port for TensorBoard')
+    parser.add_argument('--no-browser', action='store_true', help="Don't open a browser automatically")
+    parser.add_argument('--no-launch', action='store_true', help="Don't launch TensorBoard; just list found logdirs")
     args = parser.parse_args()
 
     found = find_logdirs(args.logdir)
     if not found:
         print('No TensorBoard event folders found in the usual places.')
         if args.logdir:
-            print(f"Explicit logdir '{args.logdir}' not found or contains no events.")
+            print('Explicit logdir provided but no events found at:', args.logdir)
         else:
-            print('Checked these candidate locations:')
-            for c in CANDIDATES:
-                if not c:
-                    continue
-                # show absolute path that was checked
-                p = c if os.path.isabs(c) else os.path.join(REPO_ROOT, c)
-                print(' -', os.path.abspath(p))
+            print('Checked (repo-relative) candidates:')
+            print(' -', os.path.join(REPO_ROOT, 'geometry_dash_project', 'trained_models', 'logs'))
+            print(' -', os.path.join(REPO_ROOT, 'trained_models', 'logs'))
         sys.exit(1)
 
     print('Found TensorBoard folders:')
@@ -170,17 +168,21 @@ def main():
         print('Exiting without launching TensorBoard (--no-launch).')
         return
 
-    # If multiple logdirs found, point TB at the parent folder that contains them
-    # so TensorBoard shows them as separate runs. Otherwise use the single folder.
-    if len(found) > 1:
-        # find common parent
-        common = os.path.commonpath(found)
-        chosen = common
+    # If multiple runs found, point TB at their common parent so TB shows separate runs
+    chosen = os.path.commonpath(found) if len(found) > 1 else found[0]
+
+    venv_python = find_venv_python()
+    if venv_python:
+        print('Using venv python:', venv_python)
     else:
-        chosen = found[0]
+        print('No project venv detected; using current Python interpreter:', sys.executable)
+        venv_python = sys.executable
 
     print(f'Starting TensorBoard for: {chosen} on port {args.port} ...')
-    start_tensorboard(chosen, port=args.port, open_browser=not args.no_browser)
+    proc = start_tensorboard_subprocess(venv_python, chosen, args.port, open_browser=not args.no_browser)
+
+    # Stream output until process exits or user interrupts
+    tail_process_output(proc)
 
 
 if __name__ == '__main__':
