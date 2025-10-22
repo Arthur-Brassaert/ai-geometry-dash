@@ -3,7 +3,8 @@
 ![CI](https://github.com/Arthur-Brassaert/ai-geometry-dash/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 
-Last updated: 2025-10-22
+See detailed documentation here:  
+👉 [project details/README.md](geometry_dash_project/README.md)
 
 AI Geometry Dash is a compact educational project containing:
 
