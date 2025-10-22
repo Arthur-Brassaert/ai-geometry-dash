@@ -1,0 +1,20 @@
+# CPU-only pinned PyTorch wheels
+# Use this on machines without CUDA or when you explicitly want CPU-only
+
+torch==2.6.0+cpu
+torchvision==0.21.0+cpu
+
+# Reinforcement learning
+stable-baselines3[extra]>=1.8.0
+
+# Environment & utils
+gymnasium>=0.29.0
+numpy>=1.23.0
+pygame>=2.1.0
+
+# Logging & monitoring
+tensorboard>=2.12.0
+
+# Convenience
+tqdm>=4.64.0
+rich>=12.0.0

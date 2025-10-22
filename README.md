@@ -1,13 +1,26 @@
 # AI Geometry Dash
 
-Dit project bevat een eenvoudige implementatie van een Geometry Dash-achtige omgeving en twee pogingen om een AI te trainen:
+Dit project bevat een eenvoudige implementatie van een Geometry Dash-achtige omgeving en een verzameling trainers.
+
+Zie `geometry_dash_ai_v1/geometry_dash_project/README.md` for detailed instructions on running the game, training agents, evaluating models, and starting TensorBoard.
+
+Quick start (PowerShell)
+-------------------------
+
+1) Maak en activeer de virtuele omgeving (aanbevolen):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r "geometry_dash_ai_v1/geometry_dash_project/requirements.txt"
+```
 
 - Een eigen DQN-trainer (CPU / eenvoudige vectorisatie) voor experimentele doeleinden
 - Een Stable-Baselines3 (PPO) trainer die vectorised environments gebruikt en GPU-acceleratie ondersteunt
 
 Bestandsstructuur (belangrijkste onderdelen)
 
-- `geometry dash/geometry_dash_project/`
+-- `geometry_dash_ai_v1/geometry_dash_project/`
   - `geometry_dash_game.py` — spelcode (UI / Pygame) en een headless sim voor snelle tests
   - `geometry_dash_env.py` — environment-wrapper(s), headless envs
   - `envs/` — alternatieve environment implementaties (headless, renderable, gym wrappers)
@@ -43,7 +56,7 @@ pip install -r "geometry dash/geometry_dash_project/requirements.txt"
 python "geometry dash/geometry_dash_project/train_ai_gpu.py"
 ```
 
-SB3 schrijft TensorBoard logs naar `geometry dash/geometry_dash_project/tensorboard_log`.
+SB3 schrijft TensorBoard logs naar `geometry dash/geometry_dash_project/trained_models/logs` (canonical).
 
 3) Snelle test / experimenteel DQN
 
@@ -66,27 +79,64 @@ Belangrijke paden
 - Modellen: `geometry dash/geometry_dash_project/models/`
 - TensorBoard: `geometry dash/geometry_dash_project/tensorboard_log/`
 
-Korte troubleshooting
+TensorBoard gebruiken (repo-specifiek)
 
-- TensorBoard toont niets:
-  - Controleer of er `events.out.tfevents.*` bestanden in `tensorboard_log/` staan.
-  - Start TensorBoard met: `python -m tensorboard.main --logdir "geometry dash/geometry_dash_project/tensorboard_log"`.
-- ImportErrors over ontbrekende env-varianten:
-  - Er zijn meerdere env-implementaties (headless vs renderable vs vectorized). Gebruik `HeadlessGeometryDashEnv` of voeg een kleine wrapper `VecGeometryDashEnv` toe als je vectorized API nodig hebt.
-- Progress bar hangt:
-  - Trainers gebruiken een bounded inner loop (MAX_STEPS) en in-place tqdm updates (set_postfix). Pas `mininterval` in de tqdm aan als de bar te weinig/te veel ververst.
+1) Waar staan de logs in deze repository?
 
-Aanbevelingen
+-- Stable-Baselines3-trainer (ai_v1): schrijflocatie:
+  `geometry_dash_ai_V1/geometry dash/geometry_dash_project/tensorboard_log/` — hier vind je subfolders zoals `run1_1/` met bestanden `events.out.tfevents.*`.
 
-- Voor snelle experimenten: gebruik `--no-checkpoints` en kleine `--episodes` / `--max-steps` via de CLI.
-- Voor echte runs: gebruik de GPU-trainer, vectorized envs en grotere `BATCH_SIZE` om GPU efficiëntie te maximaliseren.
+2) TensorBoard starten (PowerShell, binnen de venv)
 
-Als je wilt kan ik:
-- de README uitbreiden met voorbeeldcommando's per script en aanbevolen hyperparameters voor je GPU,
-- of CLI-opties uniform maken voor alle trainers zodat je snel kunt schakelen.
+- Activeer je virtuele omgeving:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+- Start TensorBoard met de Python uit de venv (aanbevolen). Vervang het pad door de map die in jouw run event-bestanden bevat:
+
+```powershell
+python -m tensorboard.main --logdir "G:/test/ai-geometry-dash/geometry_dash_ai_V1/geometry dash/geometry_dash_project/tensorboard_log" --port 6006
+```
+
+-- Open de UI in je browser: ga naar localhost:6006 (of `http://localhost:6006`)
+
+3) Logs genereren vanuit trainers
+
+- Stable-Baselines3 (SB3): geef `tensorboard_log` aan bij het aanmaken van het algoritme.
+  - Voorbeeld uit de repo: `tensorboard_log='tensorboard_log'` of `tensorboard_log='./training_logs/'`.
+  - SB3 maakt subfolders per run (bv. `tensorboard_log/run1_1/`).
+- Custom/PyTorch trainers: gebruik `SummaryWriter` en schrijf schalen die je wilt monitoren:
+
+```python
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter(log_dir='./training_logs/run1')
+writer.add_scalar('train/reward', reward, step)
+writer.close()
+```
+
+4) Veelvoorkomende problemen en oplossingen
+
+- Geen events zichtbaar:
+  - Controleer of er daadwerkelijk bestanden `events.out.tfevents.*` in de opgegeven map staan.
+  - Soms schrijft een trainer naar een andere map (bijv. `tensorboard_logs`, `training_logs` of `tensorboard_log`) — zoek naar `events.out.tfevents` in de repo of controleer het trainer-script.
+- TensorBoard start maar toont oude of geen runs:
+  - Geef een expliciet, absoluut pad aan `--logdir` om verwarring met relatieve paden te voorkomen.
+  - Probeer een nieuw subpad per run (bij SB3: `tb_log_name`, of voeg timestamped subfolders toe in `SummaryWriter`).
+- Poortconflict / niet bereikbaar:
+  - Als poort 6006 in gebruik is, start met `--port 6007`.
+  - Controleer firewall-instellingen als je niet op `localhost` kunt verbinden.
+- `tensorboard` niet op PATH:
+  - Gebruik `python -m tensorboard.main ...` met de venv-Python zoals hierboven; dat werkt ook als de `tensorboard` CLI niet beschikbaar is.
+
+5) Handige repo-specifieke tips
+
+- Er is een helper (`monitor_training.py`) in `geometry_dash_ai_V1/geometry dash/geometry_dash_project/` die TensorBoard via de Python API kan starten en de URL in je browser opent — handig als je al in de venv zit.
+- Wanneer je snel wilt verifiëren dat logging werkt: doe een korte run (`--episodes 5` of `--max-steps 200`) en controleer of er nieuwe `events.out.tfevents.*` bestanden verschijnen.
 
 ---
 
-Als je wilt dat ik nog extra documentatie toevoeg (bijv. how-to voor TensorBoard, of een runscript), zeg welke optie je wilt en ik regel het.
-# AI-Programming
+## AI-Programming
+
 GitHub repo voor alle bestanden rondom het AI-Programming project van Kyell De Windt, Juha Schacht en Arthur Brassert
