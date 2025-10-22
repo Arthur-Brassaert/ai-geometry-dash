@@ -1,3 +1,0 @@
-# Exact versions from pip freeze
-numpy==2.3.3
-pygame==2.6.1
