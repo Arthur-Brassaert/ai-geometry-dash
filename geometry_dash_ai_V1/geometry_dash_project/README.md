@@ -21,6 +21,7 @@ This repository contains:
   - [Run the game](#run-the-game)
     - [Quickstart helper script](#quickstart-helper-script)
   - [Playback (run agent in the game)](#playback-run-agent-in-the-game)
+  - [Repository structure](#repository-structure)
   - [TensorBoard](#tensorboard)
   - [Troubleshooting](#troubleshooting)
   - [Development notes](#development-notes)
@@ -80,6 +81,32 @@ All training artifacts are colocated under `trained_models/` (inside this projec
 - `best_overall.json` — metadata about the global best (best_mean_reward, timestamp, and archive/canonical paths when available)
 - `last_improvements.log` — plain-text append log of improvement events
 - `logs/` — TensorBoard event logs for each run
+
+## Repository structure
+
+A compact view of the main files and folders in this project:
+
+```text
+geometry_dash_project/              # Main Python package and scripts
+├─ geometry_dash_game.py            # Pygame demo (visual game loop)
+├─ ai_training_with_full_game.py    # Training script (PPO, EvalCallback, TimedStop)
+├─ ai_playing_full_game.py          # Playback / inference runner
+├─ monitor_training.py              # Small utility to inspect logs and artifacts
+├─ audio.py                         # Audio helpers and music playback
+├─ visuals.py                       # Rendering helpers for the Pygame demo
+├─ config.py                        # Game and training configuration constants
+├─ settings.json                    # Optional user settings used at runtime
+├─ highscore.txt                    # Local highscore persisted by the demo
+├─ requirements.txt                 # Python deps (GPU-capable defaults)
+├─ requirements-cpu.txt             # Alternative CPU-only deps
+├─ scripts/                         # Helper scripts (quickstart, CI helpers)
+└─ trained_models/                  # Trained artifacts, logs and metadata
+  ├─ best_model.zip                # Canonical global-best model (overwrite on improve)
+  ├─ <run>.zip                     # Run-specific SB3 checkpoints
+  ├─ <run>_vecnormalize.pkl        # VecNormalize state saved per run
+  ├─ best_overall.json             # Metadata about the canonical best
+  └─ logs/                         # TensorBoard event files
+```
 
 ## TensorBoard
 
