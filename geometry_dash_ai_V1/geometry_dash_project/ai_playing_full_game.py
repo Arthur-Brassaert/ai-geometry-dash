@@ -15,8 +15,13 @@ def main():
     project_dir = os.path.dirname(os.path.abspath(__file__))
     models_dir = os.path.join(project_dir, 'trained_models')
     if args.model_path is None:
-        # default candidate
-        args.model_path = os.path.join(models_dir, 'ai_full_game.zip')
+        # prefer the canonical best_model.zip if present
+        preferred = os.path.join(models_dir, 'best_model.zip')
+        if os.path.exists(preferred):
+            args.model_path = preferred
+        else:
+            # fallback to an auto-selected latest model
+            args.model_path = os.path.join(models_dir, 'ai_full_game.zip')
 
     if not os.path.exists(args.model_path):
         # Try to pick the newest .zip in trained_models

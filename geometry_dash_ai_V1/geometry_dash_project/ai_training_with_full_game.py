@@ -24,7 +24,7 @@ class TrainingConfig:
 
     # training loop
     total_timesteps: int = 5_000_000
-    tb_run_name: str = 'ai_full_game'
+    tb_run_name: str = 'ai_full_game_trained'
     train_seconds: int = 0
 
     # PPO hyperparams
@@ -148,25 +148,30 @@ class NotifyingEvalCallback(EvalCallback):
                 zips.sort(key=lambda p: os.path.getmtime(p), reverse=True)
                 latest = zips[0] if zips else None
 
-                # archive the latest model with a timestamped filename
-                archive_name = None
+                # update canonical best_model.zip only (no timestamped archives)
                 if latest:
-                    # Overwrite canonical best_model.zip for easy playback
                     dest_canonical = os.path.join(self.trained_models_dir, 'best_model.zip')
+                    tmp_dest = dest_canonical + '.tmp'
                     try:
-                        shutil.copy2(latest, dest_canonical)
+                        # copy latest to a temp file first, then atomically replace
+                        shutil.copy2(latest, tmp_dest)
+                        os.replace(tmp_dest, dest_canonical)
                         summary['canonical'] = os.path.basename(dest_canonical)
                         summary['canonical_path'] = dest_canonical
+                        # log replacement
+                        if self.notify_file:
+                            try:
+                                with open(self.notify_file, 'a', encoding='utf-8') as nf:
+                                    nf.write(f'Replaced canonical best with {os.path.basename(latest)} -> {dest_canonical}\n')
+                            except Exception:
+                                pass
                     except Exception:
-                        # ignore copy failure, continue to archive
-                        pass
-
-                    # Also create an immutable timestamped archive
-                    archive_name = f'best_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.zip'
-                    archive_path = os.path.join(self.trained_models_dir, archive_name)
-                    shutil.copy2(latest, archive_path)
-                    summary['archive'] = archive_name
-                    summary['archive_path'] = archive_path
+                        # cleanup temp file if needed, but don't create extra files
+                        try:
+                            if os.path.exists(tmp_dest):
+                                os.remove(tmp_dest)
+                        except Exception:
+                            pass
 
                 # write JSON summary
                 with open(best_file, 'w', encoding='utf-8') as bf:
@@ -174,8 +179,6 @@ class NotifyingEvalCallback(EvalCallback):
 
                 # notify
                 self._notify(f"🏆 New global best! mean reward {mean_reward:.3f} (previous {global_best}) saved to {best_file}")
-                if archive_name:
-                    self._notify(f"Archived best model -> {archive_name}")
 
                 # prune older archives
                 try:
