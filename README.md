@@ -11,7 +11,7 @@ AI Geometry Dash is a compact educational project containing:
 
 See the project README for full usage, training and evaluation details:
 
-[geometry_dash_ai_v1/geometry_dash_project/README](geometry_dash_ai_v1/geometry_dash_project/README.md)
+![geometry_dash_ai_v1/geometry_dash_project/README](geometry_dash_ai_v1/geometry_dash_project/README.md)
 
 ## Quick start (Windows PowerShell)
 
