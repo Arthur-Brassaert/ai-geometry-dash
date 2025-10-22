@@ -24,8 +24,8 @@ This repository contains:
   - [TensorBoard](#tensorboard)
   - [Troubleshooting](#troubleshooting)
   - [Development notes](#development-notes)
-  - [PPO Training / Terminal Output Guide](#ppo-training--terminal-output-guide)
-  - [Typische volgorde tijdens een goedlopende training](#typische-volgorde-tijdens-een-goedlopende-training)
+  - [PPO Training Terminal Output Samenvatting](#ppo-training-terminal-output-samenvatting)
+  - [Tips voor interpretatie](#tips-voor-interpretatie)
 
 ## Install
 
@@ -134,20 +134,36 @@ Open [http://localhost:6006](http://localhost:6006) in your browser.
 
 If you want me to also: (a) run a lint/format pass for GitHub-flavored Markdown, (b) add badges or CI snippets, or (c) add a short Quickstart script, tell me which and I'll add it.
 
-## PPO Training / Terminal Output Guide
+## PPO Training Terminal Output Samenvatting
 
-| Outputtype | Wat het betekent   | Extra info / voorbeeld |
-|------------|--------------------|------------------------|
-| Timesteps / Progress | Hoeveel environment-steps zijn uitgevoerd t.o.v. het doel.| Progress: `1.2e+06 / 2.0e+06`|
-| FPS / Performance | Frames-per-second en optimizer-updates; hogere waarden = sneller trainen. | `fps=123.4, n_updates=45`|
-| Eval summary | Resultaat van een evaluatiesessie (uitgevoerd na `--eval-freq` stappen). | `Eval num_timesteps=2000, mean_reward=123.45 ± 67.89`|
-| New best mean reward | De gemiddelde reward over evaluatie-episodes verbeterde — een nieuw 'best' wordt opgeslagen.| `New best mean reward!` → `trained_models/best_20251022_212300.zip`|
-| Saved artifacts | Bestanden die bij een nieuwe best (of checkpoint) worden weggeschreven.| `Saving canonical best_model.zip`; bijbehorend `*_vecnormalize.pkl`|
-| Timed / early stop | Training stopt na opgegeven wall-clock tijd (`--train-seconds`) of vroegtijdig door callback.| `TimedStopCallback: stopping training after ~3600s`|
-| Warnings / Errors | Pytorch- of omgeving-waarschuwingen (CPU vs GPU, CUDA, seeding) — kan resultaten beïnvloeden.| Let op stacktraces en device/CPU vs CUDA meldingen |
+| **Categorie** | **Metric**                 | **Omschrijving**                                                                 | **Voorbeeld / Waarde** |
+|---------------|----------------------------|-------------------------------------------------------------------------------|------------------------|
+| **Eval**      | `num_timesteps`            | Totaal aantal timesteps tot de evaluatie                                       | 1,520,000              |
+|               | `episode_reward`           | Gemiddelde reward per episode + standaarddeviatie                               | 567.01 +/- 427.81      |
+|               | `Episode length`           | Gemiddelde lengte van de episodes + std                                         | 182.60 +/- 20.83       |
+|               | `mean_ep_length`           | Gemiddelde lengte van episodes (zelfde als boven, vaak afgerond)               | 183                     |
+|               | `mean_reward`              | Gemiddelde reward (afgerond)                                                   | 567                     |
+| **Rollout**   | `ep_len_mean`              | Gemiddelde episode lengte in de rollout                                        | 185                     |
+|               | `ep_rew_mean`              | Gemiddelde episode reward in de rollout                                        | 674                     |
+|               | `fps`                      | Frames per second van de omgeving                                              | 1085                    |
+|               | `iterations`               | Aantal gradient update iteraties                                               | 93                      |
+|               | `time_elapsed`             | Totale tijd in seconden sinds start van training                               | 1403                    |
+|               | `total_timesteps`          | Totale timesteps uitgevoerd tot nu                                            | 1,523,712               |
+| **Train**     | `approx_kl`                | Geschatte KL-divergentie tussen oude en nieuwe policy                          | 0.0013                  |
+|               | `clip_fraction`            | Fractie van updates die de clip limiet raken                                   | 0.00028                 |
+|               | `clip_range`               | Clip range parameter (meestal 0.2 bij PPO)                                     | 0.2                     |
+|               | `entropy_loss`             | Negatieve entropie van de policy; hogere negatieve waarde → minder exploratie | -0.606                  |
+|               | `explained_variance`       | Hoe goed de value function de returns verklaart                                | 0.746                   |
+|               | `learning_rate`            | Huidige learning rate van de optimizer                                         | 0.0003                  |
+|               | `loss`                     | Totale loss (policy + value)                                                  | 3.73e+03                |
+|               | `n_updates`                | Totaal aantal optimizer updates tot nu                                         | 920                     |
+|               | `policy_gradient_loss`     | Loss van de policy gradient                                                    | -0.000288               |
+|               | `value_loss`               | Loss van de value function                                                     | 6.8e+03                 |
 
-## Typische volgorde tijdens een goedlopende training
+## Tips voor interpretatie
 
-1. Training loopt en logt periodiek timesteps / fps.  
-2. Evaluatie gebeurt volgens `--eval-freq` en print `mean_reward / std`.  
-3. Als `mean_reward` hoger is dan eerder, zie je `New best mean reward!` en worden modellen + JSON bestanden opgeslagen.  
+- **Eval reward**: gebruik dit om echte prestaties te monitoren (hogere mean_reward = beter).  
+- **Rollout ep_rew_mean**: korte-termijn training feedback. Soms hoger dan eval reward door overfitting op de environment.  
+- **approx_kl**: houd < 0.01 voor stabiele updates.  
+- **entropy_loss**: negatief → lagere exploratie; te laag kan leiden tot vroegtijdig vastlopen.  
+- **explained_variance**: dichtbij 1 → value function voorspelt goed; dichtbij 0 → slecht.  
