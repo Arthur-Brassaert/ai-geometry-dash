@@ -3,9 +3,6 @@
 ![CI](https://github.com/Arthur-Brassaert/ai-geometry-dash/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 
-See detailed documentation here:  
-👉 [geometry_dash_ai_v1/geometry_dash_project/README.md](geometry_dash_ai_v1/geometry_dash_project/README.md)
-
 AI Geometry Dash is a compact educational project containing:
 
 - A small Pygame-based Geometry Dash demo (playable locally)
@@ -14,7 +11,7 @@ AI Geometry Dash is a compact educational project containing:
 
 See the project README for full usage, training and evaluation details:
 
-`geometry_dash_ai_v1/geometry_dash_project/README.md`
+👉 [geometry_dash_ai_v1/geometry_dash_project/README.md](geometry_dash_ai_v1/geometry_dash_project/README.md)
 
 ## Quick start (Windows PowerShell)
 

@@ -28,14 +28,14 @@ This repository contains:
 
 ## Install
 
-1. Create and activate a virtual environment (PowerShell):
+  1 . Create and activate a virtual environment (PowerShell):
 
 ```powershell
 python -m venv .venv
 & .\.venv\Scripts\Activate.ps1
 ```
 
-2. Install dependencies (GPU or CPU):
+  2 . Install dependencies (GPU or CPU):
 
 - GPU (if you have a compatible NVIDIA GPU and want a CUDA-enabled PyTorch):
 
