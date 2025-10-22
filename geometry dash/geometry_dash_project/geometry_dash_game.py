@@ -3,9 +3,12 @@ import os
 import colorsys
 import pygame
 import random
+import argparse
 import config
 import audio
 import visuals
+import numpy as np
+
 
 
 WIDTH = 1000
@@ -47,7 +50,6 @@ SPAWN_MAX_DECREASE = 12       # frames removed from spawn_max per level
 
 # Floors (minimums) for spawn intervals so spawns don't become impossibly fast
 # (safety limits). Keep these > ~10 to avoid huge spawn bursts.
-SPAWN_MIN_FLOOR = 20
 SPAWN_MIN_FLOOR = 12
 SPAWN_MAX_FLOOR = 20
 
@@ -69,10 +71,9 @@ AUTO_JUMP_ON_LAND = True # als True, vasthouden springt meteen opnieuw bij lande
 # Groepen en tussenruimte
 GAP_MIN = 4             # minimale interne gap tussen blokken in dezelfde groep (px)
 GAP_MAX = 9           # maximale interne gap tussen blokken in dezelfde groep (px)
-MIN_GROUP_GAP_MULT = 2  # minimale veilige tussenafstand als veelvoud van spelerbreedte
+MIN_GROUP_GAP_MULT = 1  # reduce multiplier so groups spawn closer together (player width * 1)
 # extra instellingen voor willekeurige tussenafstand tussen groepen (pixels)
 # het daadwerkelijke gap wordt willekeurig gekozen tussen GROUP_GAP_MIN en GROUP_GAP_MAX
-MIN_GROUP_GAP_MULT = 1  # reduce multiplier so groups spawn closer together (player width * 1)
 GROUP_GAP_MIN = PLAYER_W * MIN_GROUP_GAP_MULT          # minimale gap tussen groepen (px)
 GROUP_GAP_MAX = PLAYER_W * (MIN_GROUP_GAP_MULT + 1)      # maximale gap tussen groepen (px)
 # Vooraf gedefinieerde groepsgroottes: mogelijke groepen die bij elkaar staan
@@ -212,12 +213,12 @@ class Obstacle:
         # whether this obstacle has already been counted as 'cleared' by the player
         self.cleared = False
 
-    def step(self, speed):
-        # speed is pixels per frame in old code; new usage will pass px/s and dt
-        self.x -= speed
+    def step(self, speed, dt: float):
+        # speed is pixels per second, dt is seconds
+        self.x -= speed * dt
 
 
-def main():
+def main(use_rl: bool = False, model_path: str | None = None, no_audio: bool = False):
     """Main entry point for the Geometry Dash demo.
 
     This function initializes pygame, loads audio/visual helpers, and runs
@@ -244,8 +245,11 @@ def main():
             surface.blit(outline_surf, (x + dx, y + dy))
         # draw main text
         surface.blit(text_surf, (x, y))
-    # Load jump sound via audio helper
-    jump_sound = audio.load_jump_sound()
+    # Load jump sound via audio helper (skip when running with --no-audio)
+    if no_audio:
+        jump_sound = None
+    else:
+        jump_sound = audio.load_jump_sound()
 
     # helper: load/save highscore
     def load_highscore():
@@ -277,14 +281,17 @@ def main():
 
     GD_MUSIC_ENABLED = config.GD_MUSIC
     MUSIC_DIR = config.DEFAULT_MUSIC_DIR
+    # honor CLI flag to disable audio entirely
+    if no_audio:
+        GD_MUSIC_ENABLED = False
 
     # music manager: collects tracks from MUSIC_DIR and controls playback
     music = audio.MusicManager(MUSIC_DIR, enabled=GD_MUSIC_ENABLED)
     # start playlist
     try:
         music.shuffle_and_start()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Music initialization error: {e}")
 
     # initialize volumes (from settings.json if available)
     settings_path = os.path.join(os.path.dirname(__file__), 'settings.json')
@@ -296,8 +303,8 @@ def main():
                 with open(settings_path, 'r', encoding='utf-8') as sf:
                     data = json.load(sf)
                     return data
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Settings load error: {e}")
         return {}
 
     def save_settings(data: dict):
@@ -305,8 +312,8 @@ def main():
             import json
             with open(settings_path, 'w', encoding='utf-8') as sf:
                 json.dump(data, sf)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Settings save error: {e}")
 
     # load saved settings (volumes etc.)
     saved = load_settings()
@@ -314,13 +321,13 @@ def main():
     sfx_vol = float(saved.get('sfx_volume', getattr(config, 'DEFAULT_VOLUME', 0.5)))
     try:
         music.set_volume(music_vol)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Music volume set error: {e}")
     try:
         if jump_sound is not None and hasattr(jump_sound, 'set_volume'):
             jump_sound.set_volume(sfx_vol)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"SFX volume set error: {e}")
 
     # pre-render rainbow surfaces once to save per-frame CPU
     pre_surf1, pre_surf2 = (None, None)
@@ -512,13 +519,15 @@ def main():
             # No obstacle-specific image found — per user preference we only
             # use files from images/obstacles for obstacles. Spikes remain plain triangles.
             print('[bg] No obstacle images found in images/obstacles — spikes will be drawn as triangles')
-    except Exception:
+    except Exception as e:
+        print(f"Image loading error: {e}")
         bg_image = None
 
     if GD_RAINBOW_ENABLED:
         try:
             pre_surf1, pre_surf2 = visuals.create_rainbow_surfaces(WIDTH, HEIGHT, RAINBOW_STYLE)
-        except Exception:
+        except Exception as e:
+            print(f"Rainbow surface creation error: {e}")
             pre_surf1, pre_surf2 = (None, None)
 
     # helper to prepare a textured triangular surface for spikes
@@ -543,7 +552,8 @@ def main():
             pygame.draw.polygon(mask, (255, 255, 255, 255), [p1, p2, p3])
             tri_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
             return tri_surf
-        except Exception:
+        except Exception as e:
+            print(f"Spike texture preparation error: {e}")
             return None
 
 
@@ -566,8 +576,8 @@ def main():
     # start music for level 0
     try:
         music.shuffle_and_start()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Music start error: {e}")
 
     # difficulty scaling
     elapsed_time = 0.0  # seconds
@@ -600,8 +610,8 @@ def main():
             elif event.type == audio.MUSIC_END_EVENT:
                 try:
                     music.handle_music_end_event(event)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Music end event error: {e}")
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     # start holding jump; if on ground, apply initial impulse
@@ -612,8 +622,8 @@ def main():
                         try:
                             if jump_sound is not None:
                                 jump_sound.play()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"Jump sound play error: {e}")
                 if event.key == pygame.K_r:
                     # restart
                     player = Player()
@@ -637,8 +647,8 @@ def main():
                     game_over = False
                     try:
                         music.shuffle_and_start()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Music restart error: {e}")
                     # pick a new background image on restart (if multiple loaded)
                     try:
                         if 'bg_images' in locals() and bg_images:
@@ -653,13 +663,13 @@ def main():
                     # toggle music pause
                     try:
                         music.toggle_pause()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Music toggle error: {e}")
                 if event.key == pygame.K_RIGHT:
                     try:
                         music.play_next()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Music next error: {e}")
                 # keyboard volume controls
                 if event.key == pygame.K_UP:
                     # increase music volume
@@ -668,16 +678,16 @@ def main():
                         music.set_volume(n)
                         saved['music_volume'] = float(n)
                         save_settings(saved)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Volume increase error: {e}")
                 if event.key == pygame.K_DOWN:
                     try:
                         n = max(0.0, music.get_volume() - 0.05)
                         music.set_volume(n)
                         saved['music_volume'] = float(n)
                         save_settings(saved)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Volume decrease error: {e}")
                 # Shift+Up/Down for SFX
                 mods = pygame.key.get_mods()
                 if mods & pygame.KMOD_SHIFT:
@@ -688,8 +698,8 @@ def main():
                             if jump_sound is not None and hasattr(jump_sound, 'set_volume'):
                                 jump_sound.set_volume(s)
                             save_settings(saved)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"SFX volume increase error: {e}")
                     if event.key == pygame.K_DOWN:
                         try:
                             s = max(0.0, float(saved.get('sfx_volume', sfx_vol)) - 0.05)
@@ -697,8 +707,8 @@ def main():
                             if jump_sound is not None and hasattr(jump_sound, 'set_volume'):
                                 jump_sound.set_volume(s)
                             save_settings(saved)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"SFX volume decrease error: {e}")
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # clicking on vertical slider (right side)
                 if event.button == 1:
@@ -735,10 +745,10 @@ def main():
                                 saved['music_volume'] = float(music.get_volume())
                                 saved['sfx_volume'] = float(saved.get('sfx_volume', sfx_vol))
                                 save_settings(saved)
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
+                            except Exception as e:
+                                print(f"Settings save error: {e}")
+                        except Exception as e:
+                            print(f"Music toggle error: {e}")
                     # next button (to the left of play/pause)
                     nbtn_x = btn_x - 8 - btn_w
                     if nbtn_x <= mx <= nbtn_x + btn_w and btn_y <= my <= btn_y + btn_h:
@@ -748,10 +758,10 @@ def main():
                                 saved['music_volume'] = float(music.get_volume())
                                 saved['sfx_volume'] = float(saved.get('sfx_volume', sfx_vol))
                                 save_settings(saved)
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
+                            except Exception as e:
+                                print(f"Settings save error: {e}")
+                        except Exception as e:
+                            print(f"Music next error: {e}")
             elif event.type == pygame.MOUSEMOTION:
                 if 'dragging' in locals() and dragging:
                     mx, my = event.pos
@@ -767,8 +777,8 @@ def main():
                     if 'dragging_target' in locals() and dragging_target == 'music':
                         try:
                             music.set_volume(vol)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"Music volume set error: {e}")
                         try:
                             if hasattr(jump_sound, 'set_volume') and jump_sound is not None:
                                 # keep sfx as previously saved
@@ -778,16 +788,16 @@ def main():
                         try:
                             saved['music_volume'] = float(vol)
                             save_settings(saved)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"Settings save error: {e}")
                     elif 'dragging_target' in locals() and dragging_target == 'sfx':
                         try:
                             saved['sfx_volume'] = float(vol)
                             if jump_sound is not None and hasattr(jump_sound, 'set_volume'):
                                 jump_sound.set_volume(vol)
                             save_settings(saved)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"SFX volume set error: {e}")
 
         if not game_over:
             elapsed_time += dt
@@ -847,10 +857,10 @@ def main():
                     pass
                 spawn_timer = random.randint(spawn_min, spawn_max)
 
-            # move obstacles using speed in px/s
-            speed_s = speed * FPS  # convert px/frame -> px/s (speed was defined as px/frame)
+            # move obstacles using speed in px/s (convert base_speed which is in px/frame)
+            speed_s = speed * FPS  # convert px/frame -> px/s
             for o in obstacles:
-                o.x -= speed_s * dt
+                o.step(speed_s, dt)
 
             obstacles = [o for o in obstacles if o.x + o.w > -50]
 
@@ -879,8 +889,8 @@ def main():
                         print(f"[bg] Forced spawn (level0): count={group_count} xs={xs} x_start={x_start}")
                     except Exception:
                         pass
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Forced spawn error: {e}")
 
             # collision using a smaller, centered hitbox for the player
             hit_w = int(player.w * HITBOX_SCALE)
@@ -899,8 +909,8 @@ def main():
                     if score > highscore:
                         highscore = score
                         save_highscore(highscore)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Highscore save error: {e}")
 
             # increment score when obstacles are cleared (pass left of the player)
             try:
@@ -909,7 +919,8 @@ def main():
                     if not getattr(o, 'cleared', False) and (o.x + o.w) < player.x:
                         o.cleared = True
                         score += 1
-            except Exception:
+            except Exception as e:
+                print(f"Score update error: {e}")
                 # fallback: if something goes wrong, keep frame-based scoring (defensive)
                 score += 1
 
@@ -939,8 +950,8 @@ def main():
                 # switch music to the appropriate level track
                 try:
                     music.shuffle_and_start()
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Level up music error: {e}")
 
             # dynamic background: cycle hue over time for a subtle animated background
             base_hue = (elapsed_time * 0.05) % 1.0  # slow cycle
@@ -954,7 +965,8 @@ def main():
             if 'bg_image' in locals() and bg_image is not None:
                 try:
                     screen.blit(bg_image, (0, 0))
-                except Exception:
+                except Exception as e:
+                    print(f"Background image blit error: {e}")
                     screen.fill(bg_color)
             else:
                 screen.fill(bg_color)
@@ -969,9 +981,8 @@ def main():
                         screen.blit(pre_surf1, (WIDTH - offset1, 0), (WIDTH, 0, WIDTH, HEIGHT))
                         screen.blit(pre_surf2, (-offset2, 0), (0, 0, WIDTH, HEIGHT))
                         screen.blit(pre_surf2, (WIDTH - offset2, 0), (WIDTH, 0, WIDTH, HEIGHT))
-                    except Exception:
-                        # fail silently and continue
-                        pass
+                    except Exception as e:
+                        print(f"Rainbow blit error: {e}")
             # draw ground: use ground_surf tiled if available, otherwise solid color
             if 'ground_surf' in locals() and ground_surf is not None:
                 try:
@@ -981,7 +992,8 @@ def main():
                     gy0 = HEIGHT - 80
                     for tx in range(0, WIDTH, gw):
                         screen.blit(ground_surf, (tx, gy0))
-                except Exception:
+                except Exception as e:
+                    print(f"Ground texture blit error: {e}")
                     pygame.draw.rect(screen, GROUND_COLOR, (0, HEIGHT - 80, WIDTH, 80))
             else:
                 pygame.draw.rect(screen, GROUND_COLOR, (0, HEIGHT - 80, WIDTH, 80))
@@ -993,13 +1005,15 @@ def main():
                             sw, sh = block_surf.get_size()
                             # use faster scale for player texture
                             player_tex = pygame.transform.scale(block_surf, (player.w, player.h))
-                        except Exception:
+                        except Exception as e:
+                            print(f"Player texture scale error: {e}")
                             player_tex = None
                     if player_tex is not None:
                         screen.blit(player_tex, (player.x, int(player.y)))
                     else:
                         pygame.draw.rect(screen, PLAYER_COLOR, (player.x, int(player.y), player.w, player.h))
-                except Exception:
+                except Exception as e:
+                    print(f"Player texture blit error: {e}")
                     pygame.draw.rect(screen, PLAYER_COLOR, (player.x, int(player.y), player.w, player.h))
             else:
                 pygame.draw.rect(screen, PLAYER_COLOR, (player.x, int(player.y), player.w, player.h))
@@ -1018,7 +1032,7 @@ def main():
                         p3 = (ox + ow // 2, oy)
                         pygame.draw.polygon(screen, (0, 0, 0), [p1, p2, p3], width=5)
                     except Exception as e:
-                        print(f"[bg] Failed to blit cached spike texture: {e}")
+                        print(f"Obstacle texture blit error: {e}")
                         p1 = (ox, oy + oh)
                         p2 = (ox + ow, oy + oh)
                         p3 = (ox + ow // 2, oy)
@@ -1049,7 +1063,7 @@ def main():
                         p3 = (ox + ow // 2, oy)
                         pygame.draw.polygon(screen, (0, 0, 0), [p1, p2, p3], width=5)
                     except Exception as e:
-                        print(f"[bg] Textured spike render failed: {e}")
+                        print(f"Textured spike render failed: {e}")
                         p1 = (ox, oy + oh)
                         p2 = (ox + ow, oy + oh)
                         p3 = (ox + ow // 2, oy)
@@ -1082,7 +1096,8 @@ def main():
             # Song title (under the progress bar) with marquee if too long
             try:
                 song_title = music.get_current_title()
-            except Exception:
+            except Exception as e:
+                print(f"Song title error: {e}")
                 song_title = None
             if song_title:
                 now_label = f"Now: {song_title}"
@@ -1117,7 +1132,8 @@ def main():
             # read current volume from music manager
             try:
                 cur_vol = music.get_volume()
-            except Exception:
+            except Exception as e:
+                print(f"Volume get error: {e}")
                 cur_vol = getattr(config, 'DEFAULT_VOLUME', 0.5)
             # filled portion (from bottom up)
             fill_h = int(slider_h * max(0.0, min(1.0, cur_vol)))
@@ -1140,7 +1156,8 @@ def main():
             is_paused = False
             try:
                 is_paused = music.is_paused()
-            except Exception:
+            except Exception as e:
+                print(f"Pause check error: {e}")
                 is_paused = False
             pygame.draw.rect(screen, (90, 90, 90), (btn_x, btn_y, btn_w, btn_h), border_radius=4)
             if is_paused:
@@ -1177,8 +1194,105 @@ def main():
         pygame.display.flip()
 
     pygame.quit()
-    sys.exit()
+    sys.exit()  
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(prog='geometry_dash_game', description='Run Geometry Dash demo')
+    parser.add_argument('--rl', action='store_true', help='Run in RL mode (headless / controlled)')
+    parser.add_argument('--model', type=str, default=None, help='Path to RL model (used when --rl is set)')
+    parser.add_argument('--no-audio', action='store_true', help='Disable audio (music and sfx)')
+    parser.add_argument('--seed', type=int, default=None, help='Optional RNG seed')
+    args = parser.parse_args()
+    if args.seed is not None:
+        try:    
+            random.seed(args.seed)
+        except Exception as e:
+            print(f"Seed set error: {e}")
+    # Backwards compatible call; main accepts keywords so old callers won't crash
+    main(use_rl=args.rl, model_path=args.model, no_audio=args.no_audio)
+
+    # Add at the VERY END of the file (after the main() function and if __name__ block)
+
+# Export classes for RL environment
+if __name__ != '__main__':
+    # These will be available when imported as a module
+    __all__ = ['Player', 'Obstacle', 'WIDTH', 'HEIGHT', 'GROUP_SIZES', 'GROUP_INTERNAL_GAP', 'SPIKE_CHANCE']
+
+
+    import random
+
+def check_collision(player, ob):
+    """Axis-aligned bounding box collision using the same scaled player hitbox as the main game."""
+    hit_w = int(player.w * HITBOX_SCALE)
+    hit_h = int(player.h * HITBOX_SCALE)
+    hit_x = int(player.x + (player.w - hit_w) / 2)
+    hit_y = int(player.y + (player.h - hit_h) / 2)
+    return (hit_x < ob.x + ob.w and hit_x + hit_w > ob.x and hit_y < ob.y + ob.h and hit_y + hit_h > ob.y)
+
+def spawn_obstacle_from_game():
+    """Spawn a new obstacle using the game's real logic."""
+    from geometry_dash_game import WIDTH, Obstacle  # local import to avoid circular dependency
+    x = WIDTH + random.randint(150, 300)
+    return Obstacle(x)
+
+class GameWrapper:
+    """Wraps your procedural Geometry Dash game to be AI-compatible."""
+    def __init__(self, render=True):
+        self.render_enabled = render
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        self.clock = pygame.time.Clock()
+        self.player = Player()
+        self.obstacles = [spawn_obstacle_from_game()]  # use your game’s obstacle generator
+        self.done = False
+        self.score = 0
+
+    def reset(self):
+        self.player = Player()
+        self.obstacles = [spawn_obstacle_from_game()]
+        self.done = False
+        self.score = 0
+        return self.get_observation()
+
+    def step(self, action):
+        """Perform one game step. action: 1=jump, 0=do nothing"""
+        dt = self.clock.tick(FPS) / 1000  # seconds
+        if action == 1:
+            self.player.jump_held = True
+            self.player.jump()
+        else:
+            self.player.jump_held = False
+
+        self.player.step(dt)
+        for ob in self.obstacles:
+            ob.step(speed=200, dt=dt)
+            if check_collision(self.player, ob):
+                self.done = True
+
+        # remove passed obstacles and spawn new ones
+        if self.obstacles and self.obstacles[0].x + self.obstacles[0].w < 0:
+            self.obstacles.pop(0)
+            self.obstacles.append(spawn_obstacle_from_game())
+
+        # update score
+        self.score += 1
+
+        obs = self.get_observation()
+        reward = 1  # simple reward per frame survived
+        return obs, reward, self.done, {}
+
+    def get_observation(self):
+        """Return observation vector for AI: player y, velocity, distance & size of next obstacle"""
+        next_ob = self.obstacles[0]
+        return [self.player.y, self.player.v,
+                next_ob.x - self.player.x,
+                next_ob.w]  # reduce to 4 elements for SB3 Box space
+
+    def render(self):
+        if not self.render_enabled:
+            return
+        self.screen.fill((135, 206, 235))
+        pygame.draw.rect(self.screen, (255, 0, 0), (self.player.x, self.player.y, self.player.w, self.player.h))
+        for ob in self.obstacles:
+            pygame.draw.rect(self.screen, (0, 0, 0), (ob.x, ob.y, ob.w, ob.h))
+        pygame.display.flip()
