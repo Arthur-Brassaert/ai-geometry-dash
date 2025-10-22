@@ -136,15 +136,15 @@ If you want me to also: (a) run a lint/format pass for GitHub-flavored Markdown,
 
 ## PPO Training / Terminal Output Guide
 
-| Outputtype                 | Wat het betekent   | Extra info / voorbeeld |
-|----------------------------|--------------------|------------------------|
-| Timesteps / Progress       | Hoeveel environment-steps zijn uitgevoerd t.o.v. het doel.| Progress: `1.2e+06 / 2.0e+06`|
-| FPS / Performance          | Frames-per-second en optimizer-updates; hogere waarden = sneller trainen. | `fps=123.4, n_updates=45`|
-| Eval summary               | Resultaat van een evaluatiesessie (uitgevoerd na `--eval-freq` stappen). | `Eval num_timesteps=2000, mean_reward=123.45 ± 67.89`|
-| New best mean reward       | De gemiddelde reward over evaluatie-episodes verbeterde — een nieuw 'best' wordt opgeslagen.| `New best mean reward!` → `trained_models/best_20251022_212300.zip`|
-| Saved artifacts            | Bestanden die bij een nieuwe best (of checkpoint) worden weggeschreven.| `Saving canonical best_model.zip`; bijbehorend `*_vecnormalize.pkl`|
-| Timed / early stop         | Training stopt na opgegeven wall-clock tijd (`--train-seconds`) of vroegtijdig door callback.| `TimedStopCallback: stopping training after ~3600s`|
-| Warnings / Errors          | Pytorch- of omgeving-waarschuwingen (CPU vs GPU, CUDA, seeding) — kan resultaten beïnvloeden.| Let op stacktraces en device/CPU vs CUDA meldingen|
+| Outputtype | Wat het betekent   | Extra info / voorbeeld |
+|------------|--------------------|------------------------|
+| Timesteps / Progress | Hoeveel environment-steps zijn uitgevoerd t.o.v. het doel.| Progress: `1.2e+06 / 2.0e+06`|
+| FPS / Performance | Frames-per-second en optimizer-updates; hogere waarden = sneller trainen. | `fps=123.4, n_updates=45`|
+| Eval summary | Resultaat van een evaluatiesessie (uitgevoerd na `--eval-freq` stappen). | `Eval num_timesteps=2000, mean_reward=123.45 ± 67.89`|
+| New best mean reward | De gemiddelde reward over evaluatie-episodes verbeterde — een nieuw 'best' wordt opgeslagen.| `New best mean reward!` → `trained_models/best_20251022_212300.zip`|
+| Saved artifacts | Bestanden die bij een nieuwe best (of checkpoint) worden weggeschreven.| `Saving canonical best_model.zip`; bijbehorend `*_vecnormalize.pkl`|
+| Timed / early stop | Training stopt na opgegeven wall-clock tijd (`--train-seconds`) of vroegtijdig door callback.| `TimedStopCallback: stopping training after ~3600s`|
+| Warnings / Errors | Pytorch- of omgeving-waarschuwingen (CPU vs GPU, CUDA, seeding) — kan resultaten beïnvloeden.| Let op stacktraces en device/CPU vs CUDA meldingen |
 
 ## Typische volgorde tijdens een goedlopende training
 
