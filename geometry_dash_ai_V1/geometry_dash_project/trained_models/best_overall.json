@@ -1,8 +1,8 @@
 {
-  "best_mean_reward": 1011.9725000000001,
-  "previous_best": null,
-  "run": "g:\\test\\ai-geometry-dash\\geometry_dash_ai_v1\\geometry_dash_project\\trained_models\\logs\\evaluations",
-  "timestamp": "2025-10-22T21:30:37.755388Z",
+  "best_mean_reward": 836.7850000000001,
+  "previous_best": 769.155,
+  "run": "g:\\test\\ai-geometry-dash\\geometry_dash_ai_v1\\geometry_dash_project\\trained_models\\logs\\ai_full_game_trained\\evaluations",
+  "timestamp": "2025-10-23T00:08:09.522340Z",
   "canonical": "best_model.zip",
   "canonical_path": "g:\\test\\ai-geometry-dash\\geometry_dash_ai_v1\\geometry_dash_project\\trained_models\\best_model.zip"
 }
