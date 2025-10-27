@@ -1,5 +1,6 @@
 import sys
 import os
+from pathlib import Path
 import colorsys
 import pygame
 import random
@@ -151,22 +152,17 @@ class Player:
         self.h = PLAYER_H
         self.x = int(WIDTH * 0.2)
         self.y = HEIGHT - 80 - self.h
-        # velocity is now in pixels/second
         self.v = 0.0
-        # convert gravity/jump (originally expressed per-frame) to per-second
-        # gravity (px/frame^2) -> gravity_s (px/s^2) requires multiplying by FPS^2
         self.gravity_s = GRAVITY * (FPS ** 2)
-        # initial jump impulse in px/s (negative = upward)
         self.jump_strength_s = JUMP_STRENGTH * FPS
-        # variable jump support
-        self.jump_held = False      # whether jump key is currently held
-        self.jump_time = 0.0        # how long jump has been held (seconds)
-        # allow slightly longer hold for extra height (seconds)
+        self.jump_held = False
+        self.jump_time = 0.0
         self.max_jump_hold = MAX_JUMP_HOLD
-        # during hold we apply a reduced gravity (minder dan normale gravity)
-        # hold gravity also converted to px/s^2
         self.hold_gravity_s = HOLD_GRAVITY * (FPS ** 2)
         self.auto_jump_on_land = AUTO_JUMP_ON_LAND
+
+        # ADD THIS: rect for AI / rendering
+        self.rect = pygame.Rect(self.x, self.y, self.w, self.h)
 
     def jump(self):
         if self.on_ground():
@@ -176,28 +172,25 @@ class Player:
         return self.y >= HEIGHT - 80 - self.h - 1
 
     def step(self, dt: float):
-        """Advance physics one frame. dt is seconds since last frame (for timing jump holds)."""
-        # choose gravity depending on whether jump is held and still within hold window
         if self.jump_held and self.v < 0 and self.jump_time < self.max_jump_hold:
-            # while holding, we increment jump_time and apply reduced gravity
             self.jump_time += dt
             effective_gravity_s = self.hold_gravity_s
         else:
             effective_gravity_s = self.gravity_s
 
-        # integrate velocity (px/s) and position
         self.v += effective_gravity_s * dt
         self.y += self.v * dt
 
-        # landing
         if self.y > HEIGHT - 80 - self.h:
             self.y = HEIGHT - 80 - self.h
             self.v = 0
-            # reset jump_time on landing
             self.jump_time = 0.0
-            # if player is holding jump and auto_jump is enabled, immediately jump again
             if self.jump_held and self.auto_jump_on_land:
                 self.v = self.jump_strength_s
+
+        # UPDATE rect position every frame
+        self.rect.topleft = (self.x, self.y)
+
 
 
 class Obstacle:
@@ -216,6 +209,499 @@ class Obstacle:
     def step(self, speed, dt: float):
         # speed is pixels per second, dt is seconds
         self.x -= speed * dt
+
+
+class Game:
+    """Programmatic game wrapper so an AI can control and observe the game.
+
+    Provides:
+      - reset()
+      - update()  # advances one frame
+      - ai_jump() # programmatic jump (press)
+      - ai_release() # release jump (optional)
+      - get_state_vector() -> numpy array
+      - get_reward() -> float (reward from last frame)
+      - is_game_over() -> bool
+    """
+
+    def __init__(self, seed: int | None = None, no_audio: bool = True):
+        if seed is not None:
+            random.seed(seed)
+        self.no_audio = no_audio
+        # initialize runtime state
+        self.reset()
+
+    def reset(self):
+        # recreate player and runtime variables (similar to main restart)
+        self.player = Player()
+        self.obstacles: list[Obstacle] = []
+        self.spawn_min = START_SPAWN_MIN
+        self.spawn_max = START_SPAWN_MAX
+        # force immediate spawn
+        self.spawn_timer = 0
+        self.base_speed = BASE_SPEED
+        self.speed = self.base_speed
+        self.score = 0
+        self.elapsed_time = 0.0
+        self.level = 0
+        self.game_over = False
+        self.last_group_right_x = -9999
+        self.min_group_gap = self.player.w * MIN_GROUP_GAP_MULT
+        # last frame reward
+        self._last_reward = 0.0
+        # cleared tracking handled on obstacles via .cleared
+        return self.get_state_vector()
+
+    def ai_jump(self):
+        # press/hold jump
+        self.player.jump_held = True
+        if self.player.on_ground():
+            self.player.jump()
+
+    def ai_release(self):
+        self.player.jump_held = False
+
+    def load_assets(self, use_repo_assets: bool = True, enable_music: bool = True):
+        """Load backgrounds, ground, obstacle images and music from the repository-level folders.
+
+        This mirrors the asset-loading logic used by the interactive main() but
+        keeps a lightweight subset suitable for programmatic runs. Call this
+        after pygame.init() so image/music subsystems are available.
+        """
+        try:
+            repo_root = Path(__file__).resolve().parent.parent
+
+            # Try several candidate locations for project-level images so this
+            # function works whether assets live at repo-root/images or under the
+            # legacy "geometry dash/geometry_dash_project/images" layout.
+            candidates = []
+            if use_repo_assets:
+                candidates.extend([
+                    repo_root / 'images',
+                    repo_root / 'geometry dash' / 'geometry_dash_project' / 'images',
+                    repo_root / 'geometry_dash_project' / 'images',
+                    repo_root / 'geometry dash' / 'images',
+                ])
+            # always also consider a local images/ next to this module
+            candidates.append(Path(__file__).resolve().parent / 'images')
+
+            images_dir = None
+            for cand in candidates:
+                try:
+                    if cand is None:
+                        continue
+                    if cand.exists() and cand.is_dir():
+                        # prefer this candidate if it contains any image files or expected subfolders
+                        # (backgrounds/obstacles/floors/blocks)
+                        has_files = False
+                        for root, _, files in os.walk(str(cand)):
+                            for f in files:
+                                if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp')):
+                                    has_files = True
+                                    break
+                            if has_files:
+                                break
+                        if has_files:
+                            images_dir = str(cand)
+                            break
+                        # if directory contains expected subfolders, accept it
+                        for sub in ('backgrounds', 'background', 'obstacles', 'floors', 'blocks', 'blocks'):
+                            if os.path.isdir(os.path.join(str(cand), sub)):
+                                images_dir = str(cand)
+                                break
+                        if images_dir:
+                            break
+                except Exception:
+                    continue
+
+            # fallback to repo_root/images string if nothing else matched
+            if images_dir is None:
+                images_dir = str(repo_root / 'images') if use_repo_assets else os.path.join(os.path.dirname(__file__), 'images')
+
+            # selected images directory (no debug printing)
+
+            def collect_recursive(subfolder):
+                res = []
+                base = os.path.join(images_dir, subfolder)
+                if not os.path.isdir(base):
+                    return res
+                exts = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp')
+                for root, _, files in os.walk(base):
+                    for f in files:
+                        if f.lower().endswith(exts):
+                            res.append(os.path.join(root, f))
+                return res
+
+            # resolve folders using config
+            def resolve_folder(name):
+                candidates = [name]
+                if not name.endswith('s'):
+                    candidates.append(name + 's')
+                else:
+                    candidates.append(name[:-1])
+                for c in candidates:
+                    if os.path.isdir(os.path.join(images_dir, c)):
+                        return c
+                return name
+
+            bg_folder = resolve_folder(config.IMAGE_SUBFOLDERS.get('background', 'background'))
+            floor_folder = resolve_folder(config.IMAGE_SUBFOLDERS.get('floor', 'floor'))
+            obstacles_folder = resolve_folder(config.IMAGE_SUBFOLDERS.get('obstacles', 'obstacles'))
+
+            bg_files = collect_recursive(bg_folder)
+            ground_files = collect_recursive(floor_folder)
+            obstacle_files = collect_recursive(obstacles_folder)
+
+            # debug: report how many candidate files were discovered
+            # (silently compute counts)
+
+            # load backgrounds (pre-scaled to screen)
+            self.bg_images = []
+            # chosen background index (randomized if multiple backgrounds exist)
+            self.bg_choice = None
+            for path in bg_files:
+                try:
+                    surf = pygame.image.load(path)
+                    # Only call convert/convert_alpha if a display surface exists; otherwise keep raw surface
+                    try:
+                        if pygame.display.get_surface() is not None:
+                            try:
+                                surf = surf.convert_alpha()
+                            except Exception:
+                                surf = surf.convert()
+                    except Exception:
+                        # if display subsystem isn't available or get_surface fails, skip conversion
+                        pass
+                    iw, ih = surf.get_size()
+                    if iw <= 0 or ih <= 0:
+                        continue
+                    scale = max(WIDTH / iw, HEIGHT / ih)
+                    new_w = int(iw * scale)
+                    new_h = int(ih * scale)
+                    try:
+                        surf = pygame.transform.smoothscale(surf, (new_w, new_h))
+                    except Exception:
+                        surf = pygame.transform.scale(surf, (new_w, new_h))
+                    final = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                    bx = (WIDTH - new_w) // 2
+                    by = (HEIGHT - new_h) // 2
+                    final.blit(surf, (bx, by))
+                    self.bg_images.append(final)
+                except Exception:
+                    # silently ignore background load failures
+                    continue
+
+            # pick a random background if any were loaded
+            try:
+                if self.bg_images:
+                    self.bg_choice = random.randrange(len(self.bg_images))
+            except Exception:
+                self.bg_choice = None
+
+            # ground texture
+            self.ground_surf = None
+            if ground_files:
+                try:
+                    gs = pygame.image.load(ground_files[0])
+                    try:
+                        if pygame.display.get_surface() is not None:
+                            try:
+                                gs = gs.convert()
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    # If the image format lacks alpha (jpg/bmp) or surface has no per-pixel alpha,
+                    # treat white as transparent so textures tile without visible white boxes.
+                    try:
+                        ext = os.path.splitext(ground_files[0])[1].lower()
+                        if (gs.get_alpha() is None) and ext in ('.jpg', '.jpeg', '.bmp'):
+                            try:
+                                gs.set_colorkey((255, 255, 255))
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    self.ground_surf = gs
+                except Exception as ex:
+                    # silently ignore ground load failures
+                    self.ground_surf = None
+
+            # obstacle/spike image (first candidate)
+            self.spike_surf = None
+            if obstacle_files:
+                try:
+                    ss = pygame.image.load(obstacle_files[0])
+                    try:
+                        if pygame.display.get_surface() is not None:
+                            try:
+                                ss = ss.convert_alpha()
+                            except Exception:
+                                ss = ss.convert()
+                    except Exception:
+                        pass
+                    # If loaded obstacle image has no alpha (e.g., JPEG), set white as transparent
+                    try:
+                        ext = os.path.splitext(obstacle_files[0])[1].lower()
+                        if (ss.get_alpha() is None) and ext in ('.jpg', '.jpeg', '.bmp'):
+                            try:
+                                ss.set_colorkey((255, 255, 255))
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    self.spike_surf = ss
+                except Exception:
+                    # silently ignore obstacle load failures
+                    self.spike_surf = None
+
+            # player block texture
+            self.block_surf = None
+            blocks_folder = resolve_folder('blocks')
+            block_files = collect_recursive(blocks_folder)
+            # discovered block files (no debug print)
+            if block_files:
+                try:
+                    bs = pygame.image.load(block_files[0])
+                    try:
+                        if pygame.display.get_surface() is not None:
+                            try:
+                                bs = bs.convert_alpha()
+                            except Exception:
+                                bs = bs.convert()
+                    except Exception:
+                        pass
+                    # If block texture lacks alpha, make white transparent so blocks look correct
+                    try:
+                        ext = os.path.splitext(block_files[0])[1].lower()
+                        if (bs.get_alpha() is None) and ext in ('.jpg', '.jpeg', '.bmp'):
+                            try:
+                                bs.set_colorkey((255, 255, 255))
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    self.block_surf = bs
+                except Exception:
+                    # silently ignore block load failures
+                    self.block_surf = None
+
+            # audio: music manager and jump sound
+            try:
+                # Choose music directory from a set of likely candidates so the
+                # project works whether sounds live at repo-root or next to this
+                # module (ai_omgeving/sounds).
+                music_candidates = []
+                if use_repo_assets:
+                    music_candidates.extend([
+                        repo_root / 'sounds' / 'level songs',
+                        repo_root / 'sounds',
+                        repo_root / 'geometry dash' / 'geometry_dash_project' / 'sounds' / 'level songs',
+                        repo_root / 'geometry dash' / 'geometry_dash_project' / 'sounds',
+                        Path(__file__).resolve().parent / 'sounds' / 'level songs',
+                        Path(__file__).resolve().parent / 'sounds',
+                    ])
+                # fallback
+                music_candidates.append(Path(config.DEFAULT_MUSIC_DIR))
+
+                chosen_music_dir = None
+                for mcd in music_candidates:
+                    try:
+                        if mcd is None:
+                            continue
+                        mpath = str(mcd)
+                        if os.path.isdir(mpath):
+                            # check for audio files
+                            has_audio = False
+                            for root, _, files in os.walk(mpath):
+                                for f in files:
+                                    if f.lower().endswith(('.mp3', '.ogg', '.wav')):
+                                        has_audio = True
+                                        break
+                                if has_audio:
+                                    break
+                            if has_audio:
+                                chosen_music_dir = mpath
+                                break
+                            # accept dir even if empty as a last resort
+                            if chosen_music_dir is None:
+                                chosen_music_dir = mpath
+                    except Exception:
+                        continue
+
+                if chosen_music_dir is None:
+                    chosen_music_dir = str(repo_root / 'sounds' / 'level songs')
+
+                self.music = audio.MusicManager(chosen_music_dir, enabled=enable_music)
+                if enable_music:
+                    try:
+                        self.music.shuffle_and_start()
+                    except Exception:
+                        pass
+            except Exception:
+                self.music = None
+
+            try:
+                jump_mp3 = os.path.join(repo_root, 'sounds', 'sound effects', 'jump.mp3')
+                if os.path.exists(jump_mp3):
+                    try:
+                        self.jump_sound = pygame.mixer.Sound(jump_mp3)
+                    except Exception:
+                        self.jump_sound = audio.load_jump_sound()
+                else:
+                    self.jump_sound = audio.load_jump_sound()
+            except Exception:
+                self.jump_sound = None
+        except Exception:
+            # fail silently — assets are optional
+            self.bg_images = []
+            self.ground_surf = None
+            self.spike_surf = None
+            self.block_surf = None
+            self.music = None
+            self.jump_sound = None
+
+    def update(self, dt: float | None = None):
+        """Advance the game by one frame (dt in seconds). If dt is None uses 1/FPS.
+        Updates internal reward (accessible via get_reward())."""
+        if dt is None:
+            dt = 1.0 / FPS
+        if self.game_over:
+            # no dynamics when game is over; reward is 0
+            self._last_reward = 0.0
+            return
+
+        self.elapsed_time += dt
+
+        # advance physics
+        self.player.step(dt)
+
+        # spawn timer is in frames (matching main); decrement by 1 per update
+        self.spawn_timer -= 1
+        if self.spawn_timer <= 0:
+            # spawn a group
+            if self.level == 0:
+                group_count = random.choice([g for g in GROUP_SIZES if g >= 2])
+            else:
+                group_count = random.choice(GROUP_SIZES)
+            group_w = self.player.w
+            group_h = self.player.h
+            gap_min, gap_max = GROUP_INTERNAL_GAP, GROUP_INTERNAL_GAP
+            desired_x = WIDTH + 20
+            if self.level == 0:
+                chosen_group_gap = random.randint(self.player.w, self.player.w * 2)
+            else:
+                chosen_group_gap = random.randint(GROUP_GAP_MIN, GROUP_GAP_MAX)
+                chosen_group_gap = max(chosen_group_gap, self.min_group_gap)
+            offset_max = int(self.player.w * 1.5)
+            extra_offset = random.randint(-offset_max, offset_max)
+            x_start_candidate = self.last_group_right_x + chosen_group_gap + extra_offset
+            x_start = max(desired_x, x_start_candidate)
+            group_right = x_start
+            for i in range(group_count):
+                x_pos = x_start + i * (group_w + gap_min)
+                kind = 'spike' if random.random() < SPIKE_CHANCE else 'normal'
+                o = Obstacle(x_pos, w=group_w, h=group_h, kind=kind)
+                self.obstacles.append(o)
+                group_right = max(group_right, x_pos + group_w)
+            self.last_group_right_x = group_right
+            self.spawn_timer = random.randint(self.spawn_min, self.spawn_max)
+
+        # move obstacles (main used speed in px/frame; convert to px/s)
+        speed_s = self.speed * FPS
+        for o in self.obstacles:
+            o.step(speed_s, dt)
+
+        # prune
+        self.obstacles = [o for o in self.obstacles if o.x + o.w > -50]
+
+        # ensure level 0 is populated
+        if self.level == 0 and len(self.obstacles) == 0:
+            group_count = random.choice(GROUP_SIZES)
+            x_start = WIDTH + 20
+            gap_min = GROUP_INTERNAL_GAP
+            for i in range(group_count):
+                x_pos = x_start + i * (self.player.w + gap_min)
+                kind = 'spike' if random.random() < SPIKE_CHANCE else 'normal'
+                self.obstacles.append(Obstacle(x_pos, w=self.player.w, h=self.player.h, kind=kind))
+
+        # collision
+        hit_w = int(self.player.w * HITBOX_SCALE)
+        hit_h = int(self.player.h * HITBOX_SCALE)
+        hit_x = int(self.player.x + (self.player.w - hit_w) / 2)
+        hit_y = int(self.player.y + (self.player.h - hit_h) / 2)
+        collided = False
+        for o in self.obstacles:
+            if hit_x < o.x + o.w and hit_x + hit_w > o.x and hit_y < o.y + o.h and hit_y + hit_h > o.y:
+                collided = True
+                break
+        if collided:
+            self.game_over = True
+            # negative reward on crash
+            self._last_reward = -5.0
+            # update highscore file
+            try:
+                if self.score > 0:
+                    with open(HIGHSCORE_FILE, 'r') as f:
+                        pass
+            except Exception:
+                pass
+            return
+
+        # scoring: when obstacle passes player
+        reward = 0.0
+        for o in self.obstacles:
+            if not getattr(o, 'cleared', False) and (o.x + o.w) < self.player.x:
+                o.cleared = True
+                self.score += 1
+                reward += 1.0
+
+        # level progression
+        if self.elapsed_time >= (self.level + 1) * LEVEL_DURATION:
+            self.level += 1
+            self.speed = self.base_speed + self.level * SPEED_INCREASE_PER_LEVEL
+            self.spawn_min = max(SPAWN_MIN_FLOOR, self.spawn_min - SPAWN_MIN_DECREASE)
+            self.spawn_max = max(SPAWN_MAX_FLOOR, self.spawn_max - SPAWN_MAX_DECREASE)
+
+        # small positive reward for surviving a frame (encourage longevity)
+        reward += 0.01
+        self._last_reward = reward
+
+    def get_state_vector(self):
+        """Return a compact numerical observation suitable for an AI.
+
+        Format (float32): [player_y_norm, player_v_norm, next_dx_norm, next_w_norm, next_h_norm, speed_norm]
+        If no obstacle ahead, next_dx is clipped to 1.0 and sizes 0.
+        """
+        import numpy as _np
+        py = float(self.player.y) / float(HEIGHT)
+        # normalize velocity by a reasonable scale (FPS * jump_strength)
+        vscale = max(1.0, abs(self.player.jump_strength_s) + 1.0)
+        pv = float(self.player.v) / vscale
+        # find next obstacle that is to the right of the player
+        next_o = None
+        dx = float(WIDTH)
+        for o in self.obstacles:
+            if o.x + o.w >= self.player.x:
+                if next_o is None or o.x < next_o.x:
+                    next_o = o
+        if next_o is not None:
+            dx = max(0.0, float(next_o.x - self.player.x))
+            nw = float(next_o.w) / float(WIDTH)
+            nh = float(next_o.h) / float(HEIGHT)
+        else:
+            dx = float(WIDTH)
+            nw = 0.0
+            nh = 0.0
+        dxn = dx / float(WIDTH)
+        speed_norm = float(self.speed) / max(1.0, BASE_SPEED + 4.0)
+        return _np.array([py, pv, dxn, nw, nh, speed_norm], dtype=_np.float32)
+
+    def get_reward(self) -> float:
+        return float(self._last_reward)
+
+    def is_game_over(self) -> bool:
+        return bool(self.game_over)
 
 
 def main(use_rl: bool = False, model_path: str | None = None, no_audio: bool = False):

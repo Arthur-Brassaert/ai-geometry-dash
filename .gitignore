@@ -1,13 +1,23 @@
-# Python cache
+# Ignore model and training artifacts
+# Root-level artifacts
+best_model/
+best_model.zip
+models/
+gd_tensorboard/
+
+# ai_omgeving artifacts (script-local)
+ai_omgeving/best_model/
+ai_omgeving/models/
+ai_omgeving/gd_tensorboard/
+
+# Common large artifacts
+*.zip
+*.pkl
+
+# Pygame and Python caches
 __pycache__/
 *.pyc
 
-# Trained models and logs (optional - enable if you do not want to version models)
-geometry_dash_ai_v1/geometry_dash_project/trained_models/logs/
-
 # Virtual environment
 .venv/
-
-# OS files
-*.DS_Store
-Thumbs.db
+env/
