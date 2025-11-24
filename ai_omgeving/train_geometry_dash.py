@@ -107,7 +107,7 @@ class EvalOnceCallback(BaseCallback):
         last_mean = getattr(self.eval_callback, 'last_mean_reward', None)
         if last_mean is not None and last_mean != self.last_mean:
             self.last_mean = last_mean
-            print(f"Evaluatie: mean_reward={self.last_mean:.2f}")
+            print(f" Evaluatie: mean_reward={self.last_mean:.2f}")
         return True
 
 # ------------------------------------
