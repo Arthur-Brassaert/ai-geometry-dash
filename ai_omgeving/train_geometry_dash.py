@@ -16,26 +16,26 @@ from tqdm import tqdm
 # ------------------------------------
 # Reward Parameters
 # ------------------------------------
-REWARD_SURVIVAL = 1.0
-REWARD_JUMP_SUCCESS = 10.0
-REWARD_OBSTACLE_AVOID = 5.0
-PENALTY_CRASH = -50.0
-PENALTY_LATE_JUMP = -20.0
-PENALTY_EARLY_JUMP = -10.0
-REWARD_PROGRESS = 0.001
+REWARD_SURVIVAL = 0.02
+REWARD_JUMP_SUCCESS = 0.5
+REWARD_OBSTACLE_AVOID = 1.0
+PENALTY_CRASH = -20.0
+PENALTY_LATE_JUMP = -1.0
+PENALTY_EARLY_JUMP = -0.5
+REWARD_PROGRESS = 0.01
 
 # ------------------------------------
 # Observation Parameters
 # ------------------------------------
-OBS_HORIZON = 200
-OBS_RESOLUTION = 4
+OBS_HORIZON = 300
+OBS_RESOLUTION = 3
 
 # ------------------------------------
 # PPO Parameters
 # ------------------------------------
 TOTAL_TIMESTEPS = 5_000_000
 NUM_ENVS = 16
-LEARNING_RATE = 3e-4
+LEARNING_RATE = 2e-4
 N_STEPS = 4096
 EVAL_FREQ = 5_000
 CHECKPOINT_FREQ = 50_000
@@ -52,6 +52,7 @@ BEST_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 BASE_LOG_DIR = SCRIPT_DIR / 'gd_tensorboard'
 BASE_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# Create unique tensorboard run dir
 safe_ts = datetime.now().strftime('%H-%M__%d-%m-%y')
 base_folder_name = f"(gd_ppo) {safe_ts}"
 folder_name = base_folder_name
@@ -61,6 +62,7 @@ while log_dir.exists():
     folder_name = f"{base_folder_name}_{counter}"
     log_dir = BASE_LOG_DIR / folder_name
     counter += 1
+
 
 # ------------------------------------
 # Advanced Progress Bar Callback
@@ -90,7 +92,6 @@ class AdvancedProgressBarCallback(BaseCallback):
         if percent_done > self.last_percent:
             self.last_percent = percent_done
 
-            # bereken eindtijd
             elapsed = time.time() - self.start_time
             frac_done = steps_done / self.total_timesteps
             if frac_done > 0:
@@ -99,14 +100,12 @@ class AdvancedProgressBarCallback(BaseCallback):
             else:
                 end_time_str = "--:--"
 
-            # evaluatie mean reward, indien beschikbaar
             eval_str = ""
             if self.eval_callback is not None:
                 mean_reward = getattr(self.eval_callback, "last_mean_reward", None)
                 if mean_reward is not None:
                     eval_str = f"Evaluatie: mean_reward={mean_reward:.2f}"
 
-            # combineer tijd en evaluatie netjes met een spatie
             postfix = f"Eindtijd: {end_time_str}"
             if eval_str:
                 postfix += "  " + eval_str
@@ -123,7 +122,7 @@ class AdvancedProgressBarCallback(BaseCallback):
 
 
 # ------------------------------------
-# Environment Factory
+# Env Factory
 # ------------------------------------
 def make_env():
     return GeometryDashEnv(
@@ -141,6 +140,9 @@ def make_env():
     )
 
 
+# ------------------------------------
+# Helpers to load previous best
+# ------------------------------------
 def find_vecnormalize_in_best(best_dir: Path) -> Path | None:
     eval_p = best_dir / 'vec_normalize_eval.pkl'
     train_p = best_dir / 'vec_normalize.pkl'
@@ -152,45 +154,60 @@ def find_vecnormalize_in_best(best_dir: Path) -> Path | None:
 
 
 def find_latest_model(best_dir: Path) -> Path | None:
-    project_root = Path(__file__).resolve().parent
-    cand_root = project_root / 'best_model.zip'
-    if cand_root.exists():
-        return cand_root
+    candidate = best_dir / 'best_model.zip'
+    if candidate.exists():
+        return candidate
 
-    zips = sorted(best_dir.glob('*.zip'), key=lambda p: p.stat().st_mtime, reverse=True)
+    zips = sorted(best_dir.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
     return zips[0] if zips else None
 
 
 # ------------------------------------
-# Create Environments
+# Create environments
 # ------------------------------------
 env = VecNormalize(make_vec_env(make_env, n_envs=NUM_ENVS, monitor_dir=str(log_dir)))
 eval_env = VecNormalize(make_vec_env(make_env, n_envs=1, monitor_dir=str(log_dir / "eval")))
 
-# ------------------------------------
-# CLI for Resume
-# ------------------------------------
-parser = argparse.ArgumentParser()
-parser.add_argument('--resume', action='store_true')
-parser.add_argument('--resume-model', type=str, default=None)
-args = parser.parse_args()
 
-resume_model_path = None
-if args.resume_model:
-    resume_model_path = Path(args.resume_model)
-elif args.resume:
-    resume_model_path = find_latest_model(BEST_MODEL_DIR)
+# ------------------------------------
+# AUTOMATIC RESUME LOGIC
+# ------------------------------------
+resume_model_path = find_latest_model(BEST_MODEL_DIR)
 
-if resume_model_path is not None:
-    try:
-        vec_p = find_vecnormalize_in_best(BEST_MODEL_DIR)
-        if vec_p is not None:
+if resume_model_path is not None and resume_model_path.exists():
+    print(f"Automatisch hervatten vanaf: {resume_model_path}")
+
+    vec_p = find_vecnormalize_in_best(BEST_MODEL_DIR)
+    if vec_p is not None:
+        try:
             env = VecNormalize.load(str(vec_p), env)
             env.training = True
             env.norm_reward = True
-            print(f"Loaded VecNormalize from {vec_p}")
+            print(f"Loaded VecNormalize from: {vec_p}")
+        except Exception as e:
+            print(f"Kon VecNormalize niet laden: {e}")
+
+    try:
+        model = PPO.load(str(resume_model_path))
+        model.set_env(env)
+        model.policy.set_training_device("cuda" if torch.cuda.is_available() else "cpu")
     except Exception as e:
-        print(f"VecNormalize load failed: {e}")
+        print(f"Kon bestaand model niet laden ({e}) — nieuw model gestart.")
+        resume_model_path = None
+
+# Geen bestaand model → nieuwe training
+if resume_model_path is None:
+    print("Geen bestaand model gevonden — start nieuwe PPO training.")
+    model = PPO(
+        "MlpPolicy",
+        env,
+        learning_rate=LEARNING_RATE,
+        n_steps=N_STEPS,
+        verbose=1,
+        tensorboard_log=str(BASE_LOG_DIR),
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        policy_kwargs={"net_arch": [256, 256, 128]},
+    )
 
 
 # ------------------------------------
@@ -212,43 +229,13 @@ eval_callback = EvalCallback(
     verbose=0
 )
 
-progress_callback = AdvancedProgressBarCallback(TOTAL_TIMESTEPS, eval_callback=eval_callback)
+progress_callback = AdvancedProgressBarCallback(
+    TOTAL_TIMESTEPS,
+    eval_callback=eval_callback
+)
 
 # ------------------------------------
-# PPO Model Creation / Resume
-# ------------------------------------
-if resume_model_path is not None and resume_model_path.exists():
-    try:
-        print(f"Resuming model from: {resume_model_path}")
-        model = PPO.load(str(resume_model_path))
-        model.set_env(env)
-        model.policy.set_training_device("cuda" if torch.cuda.is_available() else "cpu")
-    except Exception as e:
-        print(f"Failed resume: {e} — starting new model.")
-        model = PPO(
-            "MlpPolicy",
-            env,
-            learning_rate=LEARNING_RATE,
-            n_steps=N_STEPS,
-            verbose=1,
-            tensorboard_log=str(BASE_LOG_DIR),
-            device="cuda" if torch.cuda.is_available() else "cpu",
-            policy_kwargs={"net_arch": [256, 256, 128]},
-        )
-else:
-    model = PPO(
-        "MlpPolicy",
-        env,
-        learning_rate=LEARNING_RATE,
-        n_steps=N_STEPS,
-        verbose=1,
-        tensorboard_log=str(BASE_LOG_DIR),
-        device="cuda" if torch.cuda.is_available() else "cpu",
-        policy_kwargs={"net_arch": [256, 256, 128]},
-    )
-
-# ------------------------------------
-# Training
+# TRAINING
 # ------------------------------------
 model.learn(
     total_timesteps=TOTAL_TIMESTEPS,
@@ -257,7 +244,7 @@ model.learn(
 )
 
 # ------------------------------------
-# Save Final
+# SAVE FINAL MODEL + NORMALIZERS
 # ------------------------------------
 model.save(BEST_MODEL_DIR / "gd_ppo_final_model")
 env.save(BEST_MODEL_DIR / "vec_normalize.pkl")
