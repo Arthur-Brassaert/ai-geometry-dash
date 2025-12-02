@@ -16,8 +16,8 @@ from tqdm import tqdm
 # Reward Parameters
 # ------------------------------------
 REWARD_SURVIVAL = 0.02
-REWARD_JUMP_SUCCESS = 0.5
-REWARD_OBSTACLE_AVOID = 1.0
+REWARD_JUMP_SUCCESS = 2.0
+REWARD_OBSTACLE_AVOID = 10.0
 PENALTY_CRASH = -20.0
 PENALTY_LATE_JUMP = -1.0
 PENALTY_EARLY_JUMP = -0.5

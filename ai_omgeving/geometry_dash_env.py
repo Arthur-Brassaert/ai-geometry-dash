@@ -68,6 +68,7 @@ class Obstacle:
         self.h = h
         self.y = config.HEIGHT - 80 - h
         self.kind = kind
+        self.cleared = False  
 
     def step(self, speed, dt):
         self.x -= speed * dt
@@ -131,21 +132,36 @@ class GeometryDashEnv(gym.Env):
     def _get_obs(self):
         obs = np.zeros(int(self.obs_horizon / self.obs_resolution), dtype=np.float32)
         for o in self.obstacles:
-            if o.x > self.player.x and (o.x - self.player.x) < self.obs_horizon:
-                idx = int((o.x - self.player.x) / self.obs_resolution)
-                if 0 <= idx < len(obs):
-                    obs[idx] = 1.0
+            # Check if obstacle is within the observation horizon
+            if (o.x + o.w) > self.player.x and (o.x - self.player.x) < self.obs_horizon:
+                # Calculate start and end indices in the observation array
+                start_dist = max(0, o.x - self.player.x)
+                end_dist = min(self.obs_horizon, o.x + o.w - self.player.x)
+                
+                start_idx = int(start_dist / self.obs_resolution)
+                end_idx = int(end_dist / self.obs_resolution)
+                
+                # Mark the entire width of the obstacle as "1" (Danger)
+                # We use min/max to ensure we don't write outside the array
+                start_idx = max(0, min(start_idx, len(obs) - 1))
+                end_idx = max(0, min(end_idx, len(obs)))
+                
+                obs[start_idx:end_idx] = 1.0
         return obs
 
     def step(self, action):
         dt = 1.0 / config.FPS
         self.current_step += 1
 
-        # Jump logic
-        if action == 1 and self.player.on_ground():
+        # --- CORRECTED JUMP LOGIC (Variable Height) ---
+        # If the AI wants to jump (action=1), we hold the button.
+        if action == 1:
             self.player.jump_held = True
-            self.player.jump()
+            # Only trigger the initial jump impulse if on the ground
+            if self.player.on_ground():
+                self.player.jump()
         else:
+            # If AI stops pressing, release the button
             self.player.jump_held = False
 
         self.player.step(dt)
@@ -153,10 +169,12 @@ class GeometryDashEnv(gym.Env):
         # Spawn obstacles
         self.spawn_timer -= 1
         if self.spawn_timer <= 0:
+            # ... (Rest of the spawn logic remains the same) ...
+            # Ensure you copy the existing spawn logic here
             group_count = np.random.randint(1, 3)
-            group_w = np.random.uniform(config.PLAYER_W, config.PLAYER_W * 2)
-            group_h = np.random.uniform(config.PLAYER_H, config.PLAYER_H * 2)
-            gap = np.random.uniform(config.SPAWN_MIN_FLOOR, config.SPAWN_MAX_FLOOR)
+            group_w = config.PLAYER_W
+            group_h = config.PLAYER_H
+            gap = np.random.uniform(config.GROUP_GAP_MIN, config.GROUP_GAP_MAX)
             x_start = max(config.WIDTH + 20, self.last_group_right_x + gap)
             group_right = x_start
             for i in range(group_count):
@@ -171,24 +189,40 @@ class GeometryDashEnv(gym.Env):
         # Move obstacles
         for o in self.obstacles:
             o.step(self.speed, dt)
+        
         self.obstacles = [o for o in self.obstacles if o.x + o.w > -50]
 
-        # Collision detection
+        # Reward Calculation
+        reward = float(self.reward_survival)
+        
+        # Check cleared
+        for o in self.obstacles:
+            if not o.cleared and (o.x + o.w) < self.player.x:
+                o.cleared = True
+                self.score += 1
+                reward += self.reward_obstacle_avoid
+                if not self.player.on_ground():
+                     reward += self.reward_jump_success
+
+        # Collision
         hit_w = int(config.PLAYER_W * config.HITBOX_SCALE)
         hit_h = int(config.PLAYER_H * config.HITBOX_SCALE)
         hit_x = int(self.player.x + (self.player.w - hit_w) / 2)
         hit_y = int(self.player.y + (self.player.h - hit_h) / 2)
+        
         collided = False
         for o in self.obstacles:
             if hit_x < o.x + o.w and hit_x + hit_w > o.x and hit_y < o.y + o.h and hit_y + hit_h > o.y:
                 collided = True
                 break
+        
+        if collided:
+            reward += self.penalty_crash
+            done = True
+        else:
+            done = False
 
-        # Reward (use configured survival reward by default)
-        reward = float(self.reward_survival)
-        done = collided
         truncated = self.current_step > 10000
-
         obs = self._get_obs()
         return obs, reward, done, truncated, {"score": self.score}
 

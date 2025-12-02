@@ -13,8 +13,8 @@ HEIGHT = 600
 FPS = 60
 
 # --- Observation Settings (for AI / Gym interface) ---
-OBS_HORIZON = 500        # How far ahead (in pixels) the AI can "see"
-OBS_RESOLUTION = 10      # Pixel step size when sampling the environment
+OBS_HORIZON = 300        # How far ahead (in pixels) the AI can "see"
+OBS_RESOLUTION = 3      # Pixel step size when sampling the environment
 OBS_Y_OFFSET = 0         # Vertical offset for the observation line (0 = player height)
 
 # --- Player Physics & Movement ---
