@@ -142,11 +142,15 @@ class GeometryDashEnv(gym.Env):
         dt = 1.0 / config.FPS
         self.current_step += 1
 
-        # Jump logic
-        if action == 1 and self.player.on_ground():
+        # --- CORRECTED JUMP LOGIC (Variable Height) ---
+        # If the AI wants to jump (action=1), we hold the button.
+        if action == 1:
             self.player.jump_held = True
-            self.player.jump()
+            # Only trigger the initial jump impulse if on the ground
+            if self.player.on_ground():
+                self.player.jump()
         else:
+            # If AI stops pressing, release the button
             self.player.jump_held = False
 
         self.player.step(dt)
@@ -154,6 +158,8 @@ class GeometryDashEnv(gym.Env):
         # Spawn obstacles
         self.spawn_timer -= 1
         if self.spawn_timer <= 0:
+            # ... (Rest of the spawn logic remains the same) ...
+            # Ensure you copy the existing spawn logic here
             group_count = np.random.randint(1, 3)
             group_w = np.random.uniform(config.PLAYER_W, config.PLAYER_W * 2)
             group_h = np.random.uniform(config.PLAYER_H, config.PLAYER_H * 2)
@@ -173,23 +179,21 @@ class GeometryDashEnv(gym.Env):
         for o in self.obstacles:
             o.step(self.speed, dt)
         
-        # Cleanup old obstacles
         self.obstacles = [o for o in self.obstacles if o.x + o.w > -50]
 
-        # --- REWARD CALCULATION ---
+        # Reward Calculation
         reward = float(self.reward_survival)
         
-        # Check for cleared obstacles (Success Reward)
+        # Check cleared
         for o in self.obstacles:
             if not o.cleared and (o.x + o.w) < self.player.x:
                 o.cleared = True
                 self.score += 1
                 reward += self.reward_obstacle_avoid
-                # Optional: Extra bonus if we jumped recently
                 if not self.player.on_ground():
                      reward += self.reward_jump_success
 
-        # Collision detection (Crash Penalty)
+        # Collision
         hit_w = int(config.PLAYER_W * config.HITBOX_SCALE)
         hit_h = int(config.PLAYER_H * config.HITBOX_SCALE)
         hit_x = int(self.player.x + (self.player.w - hit_w) / 2)
@@ -202,13 +206,12 @@ class GeometryDashEnv(gym.Env):
                 break
         
         if collided:
-            reward += self.penalty_crash  # Apply the -20 penalty
+            reward += self.penalty_crash
             done = True
         else:
             done = False
 
         truncated = self.current_step > 10000
-
         obs = self._get_obs()
         return obs, reward, done, truncated, {"score": self.score}
 

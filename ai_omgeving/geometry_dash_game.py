@@ -12,82 +12,53 @@ import numpy as np
 
 
 
-WIDTH = 1000
-HEIGHT = 600
-FPS = 60
-
-# Color customization: change these to pick different colors for ground and player
-GROUND_COLOR = (34, 139, 34)   # default green (ForestGreen)
-PLAYER_COLOR = (220, 60, 60)    # default red-ish
-
-# Difficulty config (easy to tweak)
-# Note: spawn intervals are in frames (not seconds). With FPS=60,
-#  60 frames = 1.0 second. Consider converting to seconds if you
-#  want FPS-independent timing.
-
-# Starting spawn interval range (frames). Each new obstacle spawn
-# chooses a random interval between these two values.
-# Larger values -> fewer obstacles; smaller -> more frequent spawns.
-START_SPAWN_MIN = 15         # min frames between spawns at level 0 (~0.3s @60FPS)
-START_SPAWN_MAX = 30          # max frames between spawns at level 0 (~0.8s @60FPS) — reduced so groups appear closer
-
-# Base obstacle speed in pixels per frame. Higher -> obstacles move faster.
-BASE_SPEED = 6.0              # px/frame (≈360 px/s at 60 FPS)
-
-# Level timing: how many seconds per difficulty level before increasing
-# (e.g. 15.0 = level up every 15 seconds). Adjust to make progression
-# faster or slower.
-LEVEL_DURATION = 60.0         # seconds per level
-
-# How much to add to speed per level (linear increment):
-# speed = BASE_SPEED + level * SPEED_INCREASE_PER_LEVEL
-SPEED_INCREASE_PER_LEVEL = 1.5
-
-# How much to decrease the spawn_min / spawn_max (in frames) per level.
-# These values are subtracted from the current spawn_min/max each level
-# (floored by SPAWN_MIN_FLOOR / SPAWN_MAX_FLOOR below).
-SPAWN_MIN_DECREASE = 8        # frames removed from spawn_min per level
-SPAWN_MAX_DECREASE = 12       # frames removed from spawn_max per level
-
-# Floors (minimums) for spawn intervals so spawns don't become impossibly fast
-# (safety limits). Keep these > ~10 to avoid huge spawn bursts.
-SPAWN_MIN_FLOOR = 12
-SPAWN_MAX_FLOOR = 20
-
 # -------------------------------
-# Instelbare spel-parameters
-# Alle parameters hieronder kort beschreven in het Nederlands
+# Game Parameters (Loaded from CONFIG to match AI Training)
 # -------------------------------
-# Speler (blok) afmetingen
-PLAYER_W = 40            # breedte van het spelersblok (pixels)
-PLAYER_H = 40            # hoogte van het spelersblok (pixels)
+# Dimensions
+WIDTH = config.WIDTH
+HEIGHT = config.HEIGHT
+FPS = config.FPS
 
-# Physics / springen
-GRAVITY = 1.0            # valversnelling (pixels per frame)
-JUMP_STRENGTH = -16     # verlaagde sprongimpuls (minder hoog)
-MAX_JUMP_HOLD = 0.12    # kortere houd-tijd zodat lange sprong minder uitgesproken is
-HOLD_GRAVITY = 0.75     # iets hogere hold-gravity zodat vasthouden minder extra lift geeft
-AUTO_JUMP_ON_LAND = True # als True, vasthouden springt meteen opnieuw bij landen
+# Colors
+GROUND_COLOR = (34, 139, 34)
+PLAYER_COLOR = (220, 60, 60)
 
-# Groepen en tussenruimte
-GAP_MIN = 4             # minimale interne gap tussen blokken in dezelfde groep (px)
-GAP_MAX = 9           # maximale interne gap tussen blokken in dezelfde groep (px)
-MIN_GROUP_GAP_MULT = 1  # reduce multiplier so groups spawn closer together (player width * 1)
-# extra instellingen voor willekeurige tussenafstand tussen groepen (pixels)
-# het daadwerkelijke gap wordt willekeurig gekozen tussen GROUP_GAP_MIN en GROUP_GAP_MAX
-GROUP_GAP_MIN = PLAYER_W * MIN_GROUP_GAP_MULT          # minimale gap tussen groepen (px)
-GROUP_GAP_MAX = PLAYER_W * (MIN_GROUP_GAP_MULT + 1)      # maximale gap tussen groepen (px)
-# Vooraf gedefinieerde groepsgroottes: mogelijke groepen die bij elkaar staan
-GROUP_SIZES = [1, 2, 3]   # mogelijke groepsgroottes; spawn kiest random één
-# interne gap binnen groep: 0 zodat blokken direct naast elkaar staan
-GROUP_INTERNAL_GAP = 0
-# Chance that a spawned obstacle is a spike (0.0 - 1.0)
-SPIKE_CHANCE = 0.25
-# -------------------------------
-# Hitbox instellingen
-HITBOX_SCALE = 0.5  # schaalfactor voor de speler-hitbox (1.0 = volle grootte)
-# Highscore bestandsnaam (in dezelfde map als dit script)
-HIGHSCORE_FILE = os.path.join(os.path.dirname(__file__), 'highscore.txt')
+# Physics (Imported from Config)
+PLAYER_W = config.PLAYER_W
+PLAYER_H = config.PLAYER_H
+GRAVITY = config.GRAVITY
+JUMP_STRENGTH = config.JUMP_STRENGTH
+MAX_JUMP_HOLD = config.MAX_JUMP_HOLD
+HOLD_GRAVITY = config.HOLD_GRAVITY
+AUTO_JUMP_ON_LAND = config.AUTO_JUMP_ON_LAND
+
+# Obstacles
+GAP_MIN = config.GAP_MIN
+GAP_MAX = config.GAP_MAX
+MIN_GROUP_GAP_MULT = config.MIN_GROUP_GAP_MULT
+GROUP_GAP_MIN = config.GROUP_GAP_MIN
+GROUP_GAP_MAX = config.GROUP_GAP_MAX
+GROUP_SIZES = config.GROUP_SIZES
+GROUP_INTERNAL_GAP = config.GROUP_INTERNAL_GAP
+SPIKE_CHANCE = config.SPIKE_CHANCE
+
+# Speed (Convert config px/sec to px/frame for this script)
+BASE_SPEED = config.BASE_SPEED / FPS
+SPEED_INCREASE_PER_LEVEL = config.SPEED_INCREASE_PER_LEVEL / FPS
+
+# Difficulty
+LEVEL_DURATION = config.LEVEL_DURATION
+START_SPAWN_MIN = config.START_SPAWN_MIN
+START_SPAWN_MAX = config.START_SPAWN_MAX
+SPAWN_MIN_FLOOR = config.SPAWN_MIN_FLOOR
+SPAWN_MAX_FLOOR = config.SPAWN_MAX_FLOOR
+SPAWN_MIN_DECREASE = config.SPAWN_MIN_DECREASE
+SPAWN_MAX_DECREASE = config.SPAWN_MAX_DECREASE
+
+# Hitbox
+HITBOX_SCALE = config.HITBOX_SCALE
+HIGHSCORE_FILE = config.HIGHSCORE_FILE
 
 # ---------------------------
 # File-level configurable parameters
