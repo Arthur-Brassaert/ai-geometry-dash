@@ -68,6 +68,7 @@ class Obstacle:
         self.h = h
         self.y = config.HEIGHT - 80 - h
         self.kind = kind
+        self.cleared = False  
 
     def step(self, speed, dt):
         self.x -= speed * dt
@@ -171,22 +172,41 @@ class GeometryDashEnv(gym.Env):
         # Move obstacles
         for o in self.obstacles:
             o.step(self.speed, dt)
+        
+        # Cleanup old obstacles
         self.obstacles = [o for o in self.obstacles if o.x + o.w > -50]
 
-        # Collision detection
+        # --- REWARD CALCULATION ---
+        reward = float(self.reward_survival)
+        
+        # Check for cleared obstacles (Success Reward)
+        for o in self.obstacles:
+            if not o.cleared and (o.x + o.w) < self.player.x:
+                o.cleared = True
+                self.score += 1
+                reward += self.reward_obstacle_avoid
+                # Optional: Extra bonus if we jumped recently
+                if not self.player.on_ground():
+                     reward += self.reward_jump_success
+
+        # Collision detection (Crash Penalty)
         hit_w = int(config.PLAYER_W * config.HITBOX_SCALE)
         hit_h = int(config.PLAYER_H * config.HITBOX_SCALE)
         hit_x = int(self.player.x + (self.player.w - hit_w) / 2)
         hit_y = int(self.player.y + (self.player.h - hit_h) / 2)
+        
         collided = False
         for o in self.obstacles:
             if hit_x < o.x + o.w and hit_x + hit_w > o.x and hit_y < o.y + o.h and hit_y + hit_h > o.y:
                 collided = True
                 break
+        
+        if collided:
+            reward += self.penalty_crash  # Apply the -20 penalty
+            done = True
+        else:
+            done = False
 
-        # Reward (use configured survival reward by default)
-        reward = float(self.reward_survival)
-        done = collided
         truncated = self.current_step > 10000
 
         obs = self._get_obs()
