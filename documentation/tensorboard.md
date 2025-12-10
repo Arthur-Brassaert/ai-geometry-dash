@@ -1,3 +1,5 @@
+![tensorboard](./assets/tensorboard.png)
+
 # TensorBoard Handleiding
 
 TensorBoard is een visuele tool van TensorFlow om training, metrics en modellen te monitoren. Je kan het gebruiken om grafieken, loss, accuracy, en modelstructuren te bekijken.

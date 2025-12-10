@@ -1,3 +1,7 @@
+
+
+![ppo_baseline](./assets/ppo.png)
+
 # Uitleg: wat PPO en Baseline-3 eigenlijk doen
 
 In dit stuk leg ik uit wat **PPO (Proximal Policy Optimization)** en **Baseline-3** betekenen binnen reinforcement learning.
