@@ -64,6 +64,63 @@ Alle nodige pakketten zijn terug te vinden in het requirements.txt bestand. Deze
 ## Resultaat
 [Kyell De Windt]
 
+### Game
+
+We hebben een werkende versie van geometry dash gemaakt in pygame.
+    
+Dit was de basis van ons project omdat de AI hierop getraind zou worden.
+    
+De game is simpel gehouden met enkel de nodige features om de AI te trainen.
+    
+Zo zijn er geen menu's of levels, maar is er wel een oneindig level met obstakels die op willekeurige plekken verschijnen.
+
+De game is ontworpen om kinderen en mensen visueel en auditief aan te spreken, met kleurrijke graphics en een pakkende soundtrack.
+
+---
+
+### Training
+
+We hebben een gym omgeving gemaakt die de game simuleert en de AI de nodige observaties en rewards geeft.
+    
+De AI kan hierop getraind worden met behulp van het PPO algoritme van stable-baselines3.
+    
+We hebben verschillende hyperparameters getest om de training te optimaliseren.
+
+We hebben het model kunnen trainen tot een punt waar het redelijk goed kan spelen, maar er is nog ruimte voor verbetering.
+
+Het is zeer belangrijk om de juiste beloningsstructuur te hebben, zodat de AI leert wat het doel is van het spel (namelijk zo lang mogelijk overleven door obstakels te vermijden), en niet per ongeluk een verkeerde strategie aanleert.
+
+---
+
+### Playback
+
+We hebben een script gemaakt dat het getrainde model laadt en het spel visueel afspeelt.
+    
+Dit stelt ons in staat om te zien hoe goed het model presteert in de echte game-omgeving.
+    
+We hebben ook een script dat automatisch het beste model laadt, zodat we altijd de beste prestaties kunnen bekijken.
+
+Het getrainde model kan redelijk goed spelen, maar maakt nog steeds fouten en kan niet perfect spelen.
+    
+Dit is waarschijnlijk te wijten aan de complexiteit van het spel en de beperkingen van het PPO-algoritme.
+
+Tevens hebben we heel veel problemen met de ai in de game zelf te laten spelen, als we het script runnen dan maakt hij een schijnbaar totaal andere omgeving aan en we zijn dus niet zeker of hij wel in de juiste omgeving traint.
+
+---
+
+### Tensorboard ( meten is weten )
+
+We hebben tensorboard integratie toegevoegd om de training te monitoren.
+    
+Dit stelt ons in staat om de voortgang van de training te volgen en eventuele problemen te identificeren.
+
+We kunnen verschillende metrics bekijken, zoals de beloningen, verliesfuncties en andere statistieken die ons helpen begrijpen hoe goed het model leert.
+
+Ik moet hierbij wel zeggen dat we niet altijd even goed wisten hoe we deze data moesten interpreteren, en we soms moeite hadden om de juiste conclusies te trekken uit de grafieken.
+
+Tensorboard is een enorm handige tool om de training te visualiseren en te begrijpen.
+
+Maar heeft een zekere leercurve om het goed te kunnen gebruiken.
 
 
 ## Uitbreidingen
