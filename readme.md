@@ -144,10 +144,10 @@ Deze worden automatisch geladen tijdens playback. Je kunt hier aangepaste achter
   python ai_omgeving/launch_tensorboard.py
   ```
 
-Voor meer details, zie .
+Voor meer details, zie:
 
 [AI Geometry Dash Handleiding](/documentation/AI-GEOMETRY-DASH-README.md).
 
 en
 
-[ai training details](/documentation/geometry-dash-training-details.md).
+[AI training details](/documentation/geometry-dash-training-details.md).
