@@ -1,6 +1,6 @@
 # Uitleg: wat PPO en Baseline-3 eigenlijk doen
 
-In dit stuk leg ik uit wat **PPO (Proximal Policy Optimization)** en **Baseline-3** betekenen binnen reinforcement learning. Ik probeer het zo eenvoudig mogelijk te houden zodat iemand zonder AI-achtergrond het ook kan volgen.
+In dit stuk leg ik uit wat **PPO (Proximal Policy Optimization)** en **Baseline-3** betekenen binnen reinforcement learning.
 
 ---
 
