@@ -78,10 +78,13 @@ Nu werkt het model aan de hand van de obstakels in het spel, maar een andere uit
 
 
 ## Conclusie
-[Arthur Brassaert]
+[Arthur Brasseert]
 ### Algemene conclusie 
-Het hoofddoel van het project is behaald, namelijk het creëren van een AI die autonoom Geometry Dash kan spelen. Hierdoor zien we dit als een geslaagd project waarbij we ook de subdoelen behaald hebben. 
-Het project begon met een grondige analyse van het spel en de werking ervan, waarbij er specifiek focus werd gelegd op de timing van sprongen en obstakelherkenning. Deze analyse was de basis van ons project, hierna zijn we begonnen aan het trainen van ons AI-model. Het getrainde model is nu in staat om zelfstandig het spel te spelen zonder enige menselijke input.
+Het hoofddoel van het project is behaald, namelijk het creëren van een AI die autonoom Geometry Dash kan spelen. Hierdoor zien we dit als een geslaagd project waarbij we ook de subdoelen behaald hebben.
+
+Het project begon met een grondige analyse van het spel en de werking ervan, waarbij er specifiek focus werd gelegd op de timing van sprongen en obstakelherkenning.
+
+Deze analyse was de basis van ons project, hierna zijn we begonnen aan het trainen van ons AI-model. Het getrainde model is nu in staat om zelfstandig het spel te spelen zonder enige menselijke input.
 
 ### Individuele conclusies
 ##### Kyell:
