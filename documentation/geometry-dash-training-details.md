@@ -45,67 +45,56 @@ Episode length: 212.20 +/- 3.54
 
 De log bestaat uit verschillende secties:
 
-```md
-1. Eval_header
 
-- "num_timesteps" – Het totale aantal timesteps dat de agent tot nu toe heeft doorlopen.
+| Eval_header | uitleg |
+|-------------|--------|
+| "num_timesteps" | Het totale aantal timesteps dat de agent tot nu toe heeft doorlopen.|
+| "episode_reward" | Gemiddelde beloning per episode met standaarddeviatie (±). Dit laat zien hoe goed de agent presteert.|
+| "Episode length" | Gemiddelde lengte van een episode in stappen.|
 
-- "episode_reward" – Gemiddelde beloning per episode met standaarddeviatie (±). Dit laat zien hoe goed de agent presteert.
+---
 
-- "Episode length" – Gemiddelde lengte van een episode in stappen.
-```
+### 1. Evaluatie metrics (eval/)
 
-```md
-2. Eval metrics (eval/)
+| Eval metrics (eval/) | uitleg |
+|----------------------|--------|
+| "mean_ep_length" | Gemiddelde lengte van een episode in timesteps.|
+| "mean_reward" | Gemiddelde beloning per episode.|
+| "total_timesteps" | Totaal aantal timesteps sinds start van de training.|
 
-- `mean_ep_length` – Gemiddelde lengte van een episode in timesteps.
+---
 
-- `mean_reward` – Gemiddelde beloning per episode.
+### 2. Trainingsmetrics (train/)
 
-- `total_timesteps` – Totaal aantal timesteps sinds start van de training.
-```
+| Train metrics (train/) | uitleg |
+|-----------------------|--------|
+| "approx_kl" | Geschatte Kullback-Leibler afstand tussen de oude en nieuwe policy. Lage waarde betekent dat updates stabiel zijn.|
+| "clip_fraction" | Percentage van de batch dat geclipte updates onderging.|
+| "clip_range" | Maximale verandering van de policy per update (PPO-clipping parameter).|
+| "entropy_loss" | Mate van exploratie. Negatieve waarde, groter in absolute waarde = meer exploratie.|
+| "explained_variance" | Hoe goed de value function de returns voorspelt. Dicht bij 1 = goede voorspelling.|
+| "learning_rate" | Huidige learning rate van de optimizer.|
+| "loss" | Totale trainingsverlies van de update.|
+| "n_updates" | Aantal updates uitgevoerd.|
+| "policy_gradient_loss" | Verlies van de policy. Negatief is normaal en wijst op correcte richting van gradient.|
+| "value_loss" | Verlies van de value function.|
 
-```md
-3. Train metrics (train/)
+---
 
-- `approx_kl` – Geschatte Kullback-Leibler afstand tussen de oude en nieuwe policy. Lage waarde betekent dat updates stabiel zijn.
+### 3. Rollout metrics (rollout/)
 
-- `clip_fraction` – Percentage van de batch dat geclipte updates onderging.
+| Rollout metrics (rollout/) | uitleg |
+|----------------------------|--------|
+| "ep_len_mean" | Gemiddelde lengte van episodes in de rollout.|
+| "ep_rew_mean" | Gemiddelde beloning in de rollout.|
+| "fps" | Frames per seconde tijdens training (snelheid van training).|
+| "iterations" | Aantal training iterations uitgevoerd.|
+| "time_elapsed" | Totale tijd verstreken in seconden.|
+| "total_timesteps" | Totaal aantal timesteps uitgevoerd.|
 
-- `clip_range` – Maximale verandering van de policy per update (PPO-clipping parameter).
 
-- `entropy_loss` – Mate van exploratie. Negatieve waarde, groter in absolute waarde = meer exploratie.
+💡**Belangrijk:**
 
-- `explained_variance` – Hoe goed de value function de returns voorspelt. Dicht bij 1 = goede voorspelling.
-
-- `learning_rate` – Huidige learning rate van de optimizer.
-
-- `loss` – Totale trainingsverlies van de update.
-
-- `n_updates` – Aantal updates uitgevoerd.
-
-- `policy_gradient_loss` – Verlies van de policy. Negatief is normaal en wijst op correcte richting van gradient.
-
-- `value_loss` – Verlies van de value function.
-```
-
-```md
-4. Rollout metrics (rollout/)
-
-- `ep_len_mean` – Gemiddelde lengte van episodes in de rollout.
-
-- `ep_rew_mean` – Gemiddelde beloning in de rollout.
-
-- `fps` – Frames per seconde tijdens training (snelheid van training).
-
-- `iterations` – Aantal training iterations uitgevoerd.
-
-- `time_elapsed` – Totale tijd verstreken in seconden.
-
-- `total_timesteps` – Totaal aantal timesteps uitgevoerd.
-```
-
-**Belangrijk:**
 De evaluatie laat zien hoe goed de agent het doet op het level buiten de directe training.  
 Rollout-metrics zijn de prestaties tijdens het verzamelen van data voor updates.
 
@@ -125,7 +114,9 @@ Deze parameters sturen het leerproces en belonen het gewenste gedrag:
 | PENALTY_EARLY_JUMP | -10.0 | Straf voor te vroeg springen. |
 | REWARD_PROGRESS | 0.001 | Kleine beloning voor vooruitgang (afstand). |
 
-💡Tip: Beloningen kunnen worden afgestemd afhankelijk van level-lengte of moeilijkheid.
+💡Tip:
+
+Beloningen kunnen worden afgestemd afhankelijk van level-lengte of moeilijkheid.
 
 ---
 
@@ -153,4 +144,6 @@ Parameters voor het PPO-algoritme:
 | EVAL_FREQ |5_000 | Hoe vaak het model geëvalueerd wordt. |
 | CHECKPOINT_FREQ | 50_000 | Frequentie om checkpoints op te slaan. |
 
-💡Tip: Experimenteer met LEARNING_RATE, N_STEPS en beloningsparameters om betere prestaties op lange of willekeurige levels te bereiken.
+💡Tip:
+
+Experimenteer met LEARNING_RATE, N_STEPS en beloningsparameters om betere prestaties op lange of willekeurige levels te bereiken.

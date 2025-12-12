@@ -551,8 +551,9 @@ class Game:
         self.spawn_timer -= 1
         if self.spawn_timer <= 0:
             # spawn a group
-            if self.level == 0:
-                group_count = random.choice([g for g in GROUP_SIZES if g >= 2])
+            large_groups = [g for g in GROUP_SIZES if g >= 2]
+            if self.level == 0 and large_groups:
+                group_count = random.choice(large_groups)
             else:
                 group_count = random.choice(GROUP_SIZES)
             group_w = self.player.w
