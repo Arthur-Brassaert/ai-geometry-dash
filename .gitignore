@@ -1,18 +1,20 @@
 # Ignore model and training artifacts
 # Root-level artifacts
-best_model/
-best_model.zip
+
+# best_model/
+# best_model.zip
 models/
-gd_tensorboard/
+# gd_tensorboard/
 
 # ai_omgeving artifacts (script-local)
-ai_omgeving/best_model/
+
+# ai_omgeving/best_model/
 ai_omgeving/models/
-ai_omgeving/gd_tensorboard/
+# ai_omgeving/gd_tensorboard/
 
 # Common large artifacts
-*.zip
-*.pkl
+# *.zip
+# *.pkl
 
 # Pygame and Python caches
 __pycache__/
