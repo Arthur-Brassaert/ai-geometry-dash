@@ -30,8 +30,8 @@ De theorie achter reinforcement learning is zeer interessant, maar de implementa
 Het afstemmen van de hyperparameters, het ontwerpen van een effectieve beloningsstructuur, en het omgaan met de complexiteit van de game-omgeving waren allemaal leermomenten.
 
 #### Juha:
-Conclusie Juha
-
+Ik vond dit een leuk project, omdat je veel bijleert van AI, in ons geval reinforcement learning. Het was een uitdaging om te werken met 2 omgevingen en ervoor te proberen zorgen dat de AI even goed speelde in de echt game als in de trainings omgeving.
+Maar door de fouten te zoeken en te debuggen heb ik ook wel enorm veel bijgeleerd. Het was enorm interessant om te zien hoe de ai reageert als je bepaalde rewards/penaltys veranderde. Voor mij was het leukste aan dit project eens alles werkte de AI trainen en zien hoe die beter werd in de game.
 #### Arthur:
 Dit is een mooi project en ook zeker tof om te tonen op opendeurdagen.
 
